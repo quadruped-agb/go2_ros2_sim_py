@@ -52,22 +52,8 @@ RUN  --mount=type=cache,target=/var/cache/apt,sharing=locked \
 
 # Установка colcon-cache
 RUN pip3 install --break-system-packages git+https://github.com/ruffsl/colcon-cache.git
-# Install Livox SDK2
-RUN apt-get update && apt-get install -y \
-  cmake \
-  libpcl-dev \
-  && rm -rf /var/lib/apt/lists/*
 
-RUN git clone --depth 1 https://github.com/Livox-SDK/Livox-SDK2.git /tmp/Livox-SDK2 && \
-  cd /tmp/Livox-SDK2 && \
-  mkdir build && cd build && \
-  cmake .. -DCMAKE_CXX_FLAGS="-include cstdint -Wno-error" \
-           -DCMAKE_C_FLAGS="-Wno-error" && \
-  make -j$(nproc) && \
-  make install && \
-  ldconfig && \
-  rm -rf /tmp/Livox-SDK2
-
+RUN apt-get update && apt-get install -y cmake libpcl-dev && rm -rf /var/lib/apt/lists/*
 
 # Install RGL Gazebo Plugin (Harmonic-tagged release, ubuntu24 build)
 RUN apt-get update && apt-get install -y unzip && rm -rf /var/lib/apt/lists/*
@@ -96,6 +82,14 @@ RUN git clone --depth 1 --branch v0.2.0-harmonic https://github.com/RobotecAI/RG
 
 ENV RGL_PATTERNS_DIR=/rgl_patterns
 
+RUN pip3 install --break-system-packages ortools --ignore-installed typing_extensions
+
+RUN pip3 install --break-system-packages 'numpy<2' --ignore-installed
+RUN apt-get update && apt-get install -y \
+    ros-jazzy-octomap-server \
+    ros-jazzy-octomap-msgs \
+    ros-jazzy-octomap-ros \
+    && rm -rf /var/lib/apt/lists/*
 
 
 # Копируем исходный код
