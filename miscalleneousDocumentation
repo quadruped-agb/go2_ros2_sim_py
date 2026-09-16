@@ -1,6 +1,16 @@
 Use this to get octomap each time:
 docker exec -it simulator bash -c "apt-get update && apt-get install -y ros-jazzy-octomap-server ros-jazzy-octomap-msgs ros-jazzy-octomap-ros"
 
+Use this to run frontier explorer:
+docker exec -it simulator bash -c "source install/setup.bash && source /opt/ros/jazzy/setup.bash && \
+python3 /root/ws/src/frontier_explorer.py --ros-args \
+  -p map_topic:=/projected_map \
+  -p robot_base_frame:=base_link \
+  -p global_frame:=map \
+  -p bounds_min_x:=-25.0 -p bounds_max_x:=25.0 \
+  -p bounds_min_y:=-25.0 -p bounds_max_y:=25.0"
+  
+  
 Use this to get relay for cmd vel:
 docker exec -it simulator bash -c "source install/setup.bash && ros2 run topic_tools relay /cmd_vel /robot1/cmd_vel"
 
@@ -14,6 +24,21 @@ ros2 run octomap_server octomap_server_node --ros-args \
   -p filter_ground_plane:=false \
   -p latch:=false -r cloud_in:=/glim_ros/points"
 this worked best for me as it kept only trees as obstacles
+
+to have obstacles from ground:
+docker exec -it simulator bash -c "source install/setup.bash && source /opt/ros/jazzy/setup.bash && \
+ros2 run octomap_server octomap_server_node --ros-args \
+  -p resolution:=0.2 -p frame_id:=map -p base_frame_id:=base_link \
+  -p sensor_model.max_range:=8.0 \
+  -p filter_ground_plane:=true \
+  -p ground_filter.distance:=0.08 \
+  -p ground_filter.angle:=0.25 \
+  -p ground_filter.plane_distance:=0.5 \
+  -p point_cloud_min_z:=-1.0 \
+  -p point_cloud_max_z:=0.05 \
+  -p latch:=false -r cloud_in:=/glim_ros/points"
+
+
 
 
 docker exec -it simulator bash -c "source install/setup.bash && source /opt/ros/jazzy/setup.bash && \

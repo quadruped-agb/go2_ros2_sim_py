@@ -128,7 +128,7 @@ controller_server:
       limit_vel_cmd_in_traj: False
       stateful: True
       critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
-      BaseObstacle.scale: 0.02
+      BaseObstacle.scale: 20.0
       PathAlign.scale: 32.0
       GoalAlign.scale: 24.0
       PathAlign.forward_point_distance: 0.1
@@ -267,7 +267,7 @@ local_costmap:
         publish_voxel_map: true
         origin_z: -1.3
         z_resolution: 0.1
-        z_voxels: 20
+        z_voxels: 16
         max_obstacle_height: 2.0
         mark_threshold: 0
         observation_sources: livox

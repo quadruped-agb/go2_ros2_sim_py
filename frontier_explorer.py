@@ -37,10 +37,14 @@ from rclpy.action import ActionClient
 from rclpy.node import Node
 from rclpy.qos import QoSDurabilityPolicy, QoSProfile, QoSReliabilityPolicy
 
-from nav_msgs.msg import OccupancyGrid
-from geometry_msgs.msg import PoseStamped
+from nav_msgs.msg import OccupancyGrid, Path
+from geometry_msgs.msg import PoseStamped, Point
+from visualization_msgs.msg import Marker, MarkerArray
 from nav2_msgs.action import NavigateToPose
 from tf2_ros import Buffer, TransformListener
+
+from ortools.constraint_solver import routing_enums_pb2
+from ortools.constraint_solver import pywrapcp
 
 
 FREE = 0
@@ -57,6 +61,38 @@ SENSOR_RANGE_M = 6.0     # synthetic sensor range used for the info-gain raycast
 NUM_RAYS = 72            # angular resolution of the info-gain raycast sweep (5 deg steps)
 TOP_K_CANDIDATES = 5     # how many best-utility viewpoints to chain into a visitation queue
 UTILITY_DISTANCE_ALPHA = 1.0  # cost-utility exponent: utility = gain / (dist + eps)^alpha
+
+# ---- EDIT HERE to inject externally-supplied "must visit" / high-priority targets ----
+# Each entry: (x, y, bonus, yaw). `bonus` is subtracted from every edge cost *into*
+# that node in the TSP cost matrix (see build_cost_matrix), so a bigger bonus makes
+# the solver more strongly prefer routing to that node early/directly. Set bonus
+# very large (e.g. 1e6) to effectively force it to be visited immediately after the
+# nearest opportunity; set it near 0 to let it compete on equal footing with
+# ordinary frontier viewpoints. `yaw` (radians) is the heading the robot should
+# face on arrival -- e.g. facing into a tree trunk for an inspection viewpoint.
+DUMMY_TARGETS = [
+    # (x, y, bonus, yaw)  -- example, delete/replace with real targets:
+    # (3.5, -2.0, 50.0, 0.0),
+]
+
+# ---- Stand-in "perception pipeline" for tree inspection ----
+# Until the real perception pipeline exists, every occupied-cell cluster the
+# explorer discovers is treated as a "detected tree". For each newly-discovered
+# tree, we auto-generate 3 viewpoints spaced 120 degrees apart around it at
+# TREE_INSPECTION_RADIUS_M, each oriented to face the tree, and inject them as
+# dummy targets with TREE_VIEWPOINT_BONUS. This is the exact same mechanism a
+# real perception node would use -- it would just call
+# add_tree_inspection_viewpoints(x, y) itself instead of us discovering trees
+# from the occupancy grid.
+MIN_TREE_CLUSTER_CELLS = 4        # ignore tiny obstacle-noise blobs, not real trees
+TREE_INSPECTION_RADIUS_M = 1.0    # standoff distance for the 3 circular viewpoints
+TREE_VIEWPOINT_BONUS = 8.0        # priority of tree viewpoints vs frontier viewpoints
+TREE_DEDUP_RADIUS_M = 2.0         # don't re-detect/re-target a tree we've already handled
+                                   # (loose enough to tolerate cluster centroid jitter as
+                                   # the octomap updates between scans of the same tree)
+MAX_NEW_TREES_PER_CYCLE = 2       # rate-limit how many new trees get queued per 2s tick
+MAX_DUMMY_TARGETS = 24            # hard cap so a burst of detections can't pile up
+                                   # unboundedly and trap the robot locally
 
 
 class FrontierExplorer(Node):
@@ -105,8 +141,26 @@ class FrontierExplorer(Node):
         self.stall_count = 0         # consecutive cycles where no candidate was selectable
         self.declared_complete = False
         self.stall_limit = 5         # ~10s of no-progress before declaring complete
+        # EDIT HERE (or reassign at runtime / add a topic to push into this list)
+        # to inject externally-supplied target locations into the TSP solve --
+        # see DUMMY_TARGETS and solve_viewpoint_order for how bonus is used.
+        self.dummy_targets = list(DUMMY_TARGETS)
+        # (x, y) centroids of trees we've already generated inspection viewpoints
+        # for, so we don't regenerate the same 3 viewpoints every 2s forever.
+        self.processed_trees = []
 
         self.timer = self.create_timer(2.0, self.explore_step)
+
+        # --- Visualization: robot trail (nav_msgs/Path, native RViz Path display) ---
+        self.path_pub = self.create_publisher(Path, 'frontier_explorer/robot_path', 10)
+        self.trail_path = Path()
+        self.trail_path.header.frame_id = self.global_frame
+        self.trail_max_poses = 20000  # cap so this doesn't grow unbounded over a long run
+        self.trail_timer = self.create_timer(0.5, self.record_trail)  # 2Hz, smoother than the 2s planning tick
+
+        # --- Visualization: planned viewpoints / tree detections / route (MarkerArray) ---
+        self.marker_pub = self.create_publisher(MarkerArray, 'frontier_explorer/markers', 10)
+        self.last_candidates = []  # most recent frontier candidate scoring, kept for visualization only
 
         self.get_logger().info(
             f'Frontier explorer up. Listening on {self.map_topic}. '
@@ -149,32 +203,179 @@ class FrontierExplorer(Node):
         w, h = grid_msg.info.width, grid_msg.info.height
         data = np.array(grid_msg.data, dtype=np.int8).reshape(h, w)
 
+        # Stand-in perception pipeline: pick up newly-seen "trees" (obstacle
+        # clusters) every cycle, regardless of frontier state, and queue their
+        # inspection viewpoints as dummy targets.
+        self.scan_for_new_trees(data, grid_msg)
+
         clusters = self.detect_frontier_clusters(grid_msg, data)
         if not clusters:
+            self.last_candidates = []
+            if self.dummy_targets:
+                ordered_nodes = self.solve_viewpoint_order([], robot_xy)
+                self.goal_queue = [(x, y, yaw) for (x, y, _bonus, yaw) in ordered_nodes]
+                self.get_logger().info(
+                    f'No frontier clusters remain, but {len(self.dummy_targets)} '
+                    f'dummy target(s) still pending -- routing to them.')
+                self.publish_planning_markers(robot_xy)
+                return
             self.announce_complete(data, 'no frontier clusters remain')
+            self.publish_planning_markers(robot_xy)
             return
 
         candidates = self.score_candidates(clusters, data, grid_msg, robot_xy)
+        self.last_candidates = candidates
         if not candidates:
+            if self.dummy_targets:
+                ordered_nodes = self.solve_viewpoint_order([], robot_xy)
+                self.goal_queue = [(x, y, yaw) for (x, y, _bonus, yaw) in ordered_nodes]
+                self.publish_planning_markers(robot_xy)
+                return
             self.stall_count += 1
             if self.stall_count >= self.stall_limit:
                 self.announce_complete(
                     data, f'{len(clusters)} frontier cluster(s) remain but none have '
                           f'been reachable/selectable for {self.stall_count} consecutive checks')
+            self.publish_planning_markers(robot_xy)
             return
         self.stall_count = 0
         self.declared_complete = False
 
-        # Take the top-K by utility, then chain them into a short visitation
-        # order via greedy nearest-neighbor from the robot's current pose --
-        # a lightweight stand-in for a proper coverage-path TSP ordering.
+        # Take the top-K by utility, then solve a real TSP ordering (OR-Tools)
+        # over the robot's current position + these candidates + any injected
+        # dummy targets -- this is the actual coverage-path-guided visitation
+        # ordering, not just a greedy nearest-neighbor approximation.
         top = sorted(candidates, key=lambda c: c['utility'], reverse=True)[:self.top_k_candidates]
-        ordered = self.nn_chain_order(top, robot_xy)
-        self.goal_queue = [(c['x'], c['y'], c['yaw']) for c in ordered]
+        ordered_nodes = self.solve_viewpoint_order(top, robot_xy)
+        self.goal_queue = [(x, y, yaw) for (x, y, _bonus, yaw) in ordered_nodes]
 
         self.get_logger().info(
             f'Planned a {len(self.goal_queue)}-viewpoint sweep from '
             f'{len(candidates)} candidates (of {len(clusters)} frontier clusters).')
+        self.publish_planning_markers(robot_xy)
+
+    def record_trail(self):
+        """Append the robot's current position to a growing nav_msgs/Path so RViz
+        can render its full traversal history (Add -> By topic -> robot_path -> Path)."""
+        robot_xy = self.get_robot_pose_xy()
+        if robot_xy is None:
+            return
+        pose = PoseStamped()
+        pose.header.frame_id = self.global_frame
+        pose.header.stamp = self.get_clock().now().to_msg()
+        pose.pose.position.x = robot_xy[0]
+        pose.pose.position.y = robot_xy[1]
+        pose.pose.orientation.w = 1.0
+        self.trail_path.poses.append(pose)
+        if len(self.trail_path.poses) > self.trail_max_poses:
+            self.trail_path.poses.pop(0)
+        self.trail_path.header.stamp = self.get_clock().now().to_msg()
+        self.path_pub.publish(self.trail_path)
+
+    def publish_planning_markers(self, robot_xy):
+        """Publish everything needed to visually verify the planner's decisions:
+        - blue spheres: all frontier candidates considered this cycle
+        - orange cubes: detected 'tree' centroids (stand-in perception results) --
+          compare these against real tree trunk positions in Gazebo to sanity-check
+          the detection
+        - green arrows: pending tree-inspection viewpoints (dummy_targets), oriented
+          to show which way they face
+        - magenta line + arrows: the current planned goal_queue, in visiting order
+        Re-published fresh every cycle with a DELETEALL first so nothing goes stale
+        (we got bitten by stale markers earlier today -- this avoids that)."""
+        markers = MarkerArray()
+        clear = Marker()
+        clear.action = Marker.DELETEALL
+        markers.markers.append(clear)
+
+        now = self.get_clock().now().to_msg()
+        mid = 0
+
+        def make_sphere(x, y, r, g, b, scale=0.25):
+            nonlocal mid
+            m = Marker()
+            m.header.frame_id = self.global_frame
+            m.header.stamp = now
+            m.ns = 'candidates'
+            m.id = mid; mid += 1
+            m.type = Marker.SPHERE
+            m.action = Marker.ADD
+            m.pose.position.x = x
+            m.pose.position.y = y
+            m.pose.position.z = 0.2
+            m.pose.orientation.w = 1.0
+            m.scale.x = m.scale.y = m.scale.z = scale
+            m.color.r, m.color.g, m.color.b, m.color.a = r, g, b, 0.9
+            return m
+
+        def make_cube(x, y, r, g, b, scale=0.3):
+            nonlocal mid
+            m = Marker()
+            m.header.frame_id = self.global_frame
+            m.header.stamp = now
+            m.ns = 'trees'
+            m.id = mid; mid += 1
+            m.type = Marker.CUBE
+            m.action = Marker.ADD
+            m.pose.position.x = x
+            m.pose.position.y = y
+            m.pose.position.z = 0.3
+            m.pose.orientation.w = 1.0
+            m.scale.x = m.scale.y = m.scale.z = scale
+            m.color.r, m.color.g, m.color.b, m.color.a = r, g, b, 0.9
+            return m
+
+        def make_arrow(x, y, yaw, r, g, b, ns, length=0.4):
+            nonlocal mid
+            m = Marker()
+            m.header.frame_id = self.global_frame
+            m.header.stamp = now
+            m.ns = ns
+            m.id = mid; mid += 1
+            m.type = Marker.ARROW
+            m.action = Marker.ADD
+            m.pose.position.x = x
+            m.pose.position.y = y
+            m.pose.position.z = 0.25
+            m.pose.orientation.z = math.sin(yaw / 2.0)
+            m.pose.orientation.w = math.cos(yaw / 2.0)
+            m.scale.x = length
+            m.scale.y = 0.08
+            m.scale.z = 0.08
+            m.color.r, m.color.g, m.color.b, m.color.a = r, g, b, 0.95
+            return m
+
+        # frontier candidates considered this cycle (blue)
+        for c in self.last_candidates:
+            markers.markers.append(make_sphere(c['x'], c['y'], 0.2, 0.4, 1.0))
+
+        # detected tree centroids (orange) -- compare against real trunks in Gazebo
+        for (tx, ty) in self.processed_trees:
+            markers.markers.append(make_cube(tx, ty, 1.0, 0.5, 0.0))
+
+        # pending tree-inspection viewpoints (green arrows, oriented)
+        for (gx, gy, bonus, yaw) in self.dummy_targets:
+            markers.markers.append(make_arrow(gx, gy, yaw, 0.0, 1.0, 0.0, 'tree_viewpoints'))
+
+        # planned route: robot -> each queued goal in order (magenta line + arrows)
+        if self.goal_queue:
+            line = Marker()
+            line.header.frame_id = self.global_frame
+            line.header.stamp = now
+            line.ns = 'planned_route'
+            line.id = mid; mid += 1
+            line.type = Marker.LINE_STRIP
+            line.action = Marker.ADD
+            line.scale.x = 0.06
+            line.color.r, line.color.g, line.color.b, line.color.a = 1.0, 0.0, 1.0, 0.9
+            line.pose.orientation.w = 1.0
+            line.points.append(Point(x=robot_xy[0], y=robot_xy[1], z=0.1))
+            for (gx, gy, gyaw) in self.goal_queue:
+                line.points.append(Point(x=gx, y=gy, z=0.1))
+                markers.markers.append(make_arrow(gx, gy, gyaw, 1.0, 0.0, 1.0, 'planned_route'))
+            markers.markers.append(line)
+
+        self.marker_pub.publish(markers)
 
     def compute_coverage_pct(self, data):
         """Fraction of the grid that is known (free or occupied) vs still unknown --
@@ -194,6 +395,88 @@ class FrontierExplorer(Node):
             f'Exploration complete: {reason}. '
             f'{self.visited_frontier_count} viewpoint(s) visited. '
             f'Map coverage (known/unknown cells within current grid): {pct:.1f}%.')
+
+    # ---------- stand-in perception: treat obstacle clusters as "detected trees" ----------
+
+    def detect_obstacle_clusters(self, data):
+        """Same connected-component approach as detect_frontier_clusters, but over
+        OCCUPIED cells instead of frontier cells. This is the stand-in for a real
+        perception pipeline's tree-trunk detector -- swap this out for an actual
+        detection callback later; everything downstream (viewpoint generation,
+        TSP injection) stays the same either way."""
+        h, w = data.shape
+        occ_mask = (data >= OCC_THRESHOLD)
+        visited = np.zeros_like(occ_mask)
+        clusters = []
+        ys, xs = np.nonzero(occ_mask)
+        occ_cells = set(zip(ys.tolist(), xs.tolist()))
+
+        for start in occ_cells:
+            if visited[start]:
+                continue
+            q = deque([start])
+            visited[start] = True
+            cluster = []
+            while q:
+                cy, cx = q.popleft()
+                cluster.append((cy, cx))
+                for dy in (-1, 0, 1):
+                    for dx in (-1, 0, 1):
+                        if dx == 0 and dy == 0:
+                            continue
+                        ny, nx = cy + dy, cx + dx
+                        if (ny, nx) in occ_cells and not visited[ny, nx]:
+                            visited[ny, nx] = True
+                            q.append((ny, nx))
+            if len(cluster) >= MIN_TREE_CLUSTER_CELLS:
+                clusters.append(cluster)
+        return clusters
+
+    def is_known_tree(self, tx, ty):
+        for (px, py) in self.processed_trees:
+            if math.hypot(tx - px, ty - py) < TREE_DEDUP_RADIUS_M:
+                return True
+        return False
+
+    def generate_tree_viewpoints(self, data, grid_msg, tx, ty):
+        """Generate up to 3 viewpoints spaced 120 degrees apart around a detected
+        tree at (tx, ty), each pulled back to TREE_INSPECTION_RADIUS_M and checked
+        for real clearance -- a tree with a close neighbor may only yield 1 or 2
+        valid viewpoints instead of 3, which is fine, we just skip the blocked ones."""
+        viewpoints = []
+        for k in range(3):
+            angle = k * (2.0 * math.pi / 3.0)
+            gx = tx + TREE_INSPECTION_RADIUS_M * math.cos(angle)
+            gy = ty + TREE_INSPECTION_RADIUS_M * math.sin(angle)
+            if self.in_bounds(gx, gy) and self.has_clearance(data, grid_msg, gx, gy, MIN_OBSTACLE_CLEARANCE_M):
+                yaw = math.atan2(ty - gy, tx - gx)  # face into the tree
+                viewpoints.append((gx, gy, yaw))
+        return viewpoints
+
+    def scan_for_new_trees(self, data, grid_msg):
+        """Run every cycle: find obstacle clusters the explorer hasn't seen before,
+        generate their 3 circular inspection viewpoints, and inject them as dummy
+        targets. Rate-limited to MAX_NEW_TREES_PER_CYCLE so a big already-mapped
+        area doesn't dump dozens of targets into the solver in one tick."""
+        if len(self.dummy_targets) >= MAX_DUMMY_TARGETS:
+            return  # already have plenty queued, work through the backlog first
+        clusters = self.detect_obstacle_clusters(data)
+        new_trees_added = 0
+        for cluster in clusters:
+            if new_trees_added >= MAX_NEW_TREES_PER_CYCLE:
+                break
+            tx, ty = self.cluster_centroid_world(cluster, grid_msg)
+            if self.is_known_tree(tx, ty):
+                continue
+            self.processed_trees.append((tx, ty))
+            viewpoints = self.generate_tree_viewpoints(data, grid_msg, tx, ty)
+            for (gx, gy, yaw) in viewpoints:
+                self.dummy_targets.append((gx, gy, TREE_VIEWPOINT_BONUS, yaw))
+            new_trees_added += 1
+            if viewpoints:
+                self.get_logger().info(
+                    f'Detected tree at ({tx:.2f}, {ty:.2f}) -- queued '
+                    f'{len(viewpoints)}/3 inspection viewpoint(s) around it.')
 
     # ---------- frontier detection ----------
 
@@ -376,19 +659,87 @@ class FrontierExplorer(Node):
 
         return candidates
 
-    def nn_chain_order(self, candidates, robot_xy):
-        """Cheap greedy nearest-neighbor chain over a small candidate set -- a
-        lightweight stand-in for a proper coverage-path TSP ordering. Cost is
-        negligible since len(candidates) <= top_k_candidates (~5)."""
-        remaining = list(candidates)
-        ordered = []
-        cur = robot_xy
-        while remaining:
-            remaining.sort(key=lambda c: math.hypot(c['x'] - cur[0], c['y'] - cur[1]))
-            nxt = remaining.pop(0)
-            ordered.append(nxt)
-            cur = (nxt['x'], nxt['y'])
-        return ordered
+    def build_cost_matrix(self, nodes):
+        """Build the N x N cost matrix handed to the TSP solver. nodes[0] is always
+        the robot's current position (the depot). Every other node is a candidate
+        viewpoint: (x, y, bonus, yaw). `bonus` is subtracted from the cost of every
+        edge *arriving* at that node -- this is the direct, hand-editable lever for
+        prioritizing specific targets (dummy or otherwise): raise a node's bonus
+        and the solver will bias its route to reach that node sooner / more
+        directly, without you having to hand-craft the route yourself.
+
+        EDIT HERE if you want a different cost model -- e.g. swap the Euclidean
+        distance() call below for a real path-length query (Nav2's ComputePathToPose
+        service) if straight-line distance is too optimistic around obstacles.
+        """
+        n = len(nodes)
+        matrix = [[0] * n for _ in range(n)]
+        for i in range(n):
+            xi, yi, _, _ = nodes[i]
+            for j in range(n):
+                if i == j:
+                    continue
+                xj, yj, bonus_j, _ = nodes[j]
+                dist = math.hypot(xj - xi, yj - yi)
+                cost = dist - bonus_j
+                matrix[i][j] = max(0, int(round(cost * 1000)))  # ortools wants integers
+        return matrix
+
+    def solve_viewpoint_order(self, candidates, robot_xy):
+        """Real TSP solve (Google OR-Tools) over the robot's current position plus
+        every candidate viewpoint (plus any DUMMY_TARGETS), replacing the old
+        greedy nearest-neighbor chain. This is an OPEN path (robot does not need
+        to return to its start), implemented via the standard trick of zeroing
+        the cost of every edge back into the depot."""
+        nodes = [(robot_xy[0], robot_xy[1], 0.0, 0.0)]
+        for c in candidates:
+            nodes.append((c['x'], c['y'], c['utility'], c['yaw']))
+        for (tx, ty, tbonus, tyaw) in self.dummy_targets:
+            if self.is_blacklisted(tx, ty):
+                continue  # this exact point already failed -- don't resend it forever
+            nodes.append((tx, ty, tbonus, tyaw))
+
+        n = len(nodes)
+        if n <= 1:
+            return []
+        if n == 2:
+            return [nodes[1]]
+
+        matrix = self.build_cost_matrix(nodes)
+        # open-path trick: make returning to the depot free, so the solver isn't
+        # penalized for "coming home" -- we only care about the outbound tour
+        for i in range(n):
+            matrix[i][0] = 0
+
+        manager = pywrapcp.RoutingIndexManager(n, 1, 0)  # n nodes, 1 vehicle, depot=0
+        routing = pywrapcp.RoutingModel(manager)
+
+        def distance_callback(from_index, to_index):
+            from_node = manager.IndexToNode(from_index)
+            to_node = manager.IndexToNode(to_index)
+            return matrix[from_node][to_node]
+
+        transit_idx = routing.RegisterTransitCallback(distance_callback)
+        routing.SetArcCostEvaluatorOfAllVehicles(transit_idx)
+
+        search_params = pywrapcp.DefaultRoutingSearchParameters()
+        search_params.first_solution_strategy = (
+            routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC)
+        search_params.time_limit.FromSeconds(1)  # candidate sets are small (<=~10), no need for more
+
+        solution = routing.SolveWithParameters(search_params)
+        if solution is None:
+            self.get_logger().warn('OR-Tools TSP solve failed, falling back to input order')
+            return [n for n in nodes[1:]]
+
+        order = []
+        index = routing.Start(0)
+        while not routing.IsEnd(index):
+            node = manager.IndexToNode(index)
+            if node != 0:
+                order.append(nodes[node])
+            index = solution.Value(routing.NextVar(index))
+        return order
 
     def is_blacklisted(self, x, y):
         for (bx, by) in self.failed_goals:
@@ -434,13 +785,22 @@ class FrontierExplorer(Node):
 
     def goal_result_cb(self, future, xy):
         status = future.result().status
+        gx, gy = xy
         if status != 4:  # 4 = SUCCEEDED
             self.get_logger().warn(f'Goal to {xy} did not succeed (status={status}), blacklisting')
             self.failed_goals.append(xy)
             self.goal_queue.clear()  # abandon the rest of this sweep, replan fresh next step
+            # remove it from dummy_targets too -- a permanently unreachable viewpoint
+            # shouldn't sit there forever as dead weight
+            self.dummy_targets = [
+                t for t in self.dummy_targets if math.hypot(t[0] - gx, t[1] - gy) > 0.3
+            ]
         else:
             self.get_logger().info(f'Reached frontier goal {xy}')
             self.visited_frontier_count += 1
+            self.dummy_targets = [
+                t for t in self.dummy_targets if math.hypot(t[0] - gx, t[1] - gy) > 0.3
+            ]
         self.exploring = False
 
 
