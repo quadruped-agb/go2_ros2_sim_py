@@ -60,7 +60,14 @@ REPLAN_ON_FAILURE_BLACKLIST_M = 0.75  # don't re-pick a goal within this radius 
 SENSOR_RANGE_M = 6.0     # synthetic sensor range used for the info-gain raycast estimate
 NUM_RAYS = 72            # angular resolution of the info-gain raycast sweep (5 deg steps)
 TOP_K_CANDIDATES = 5     # how many best-utility viewpoints to chain into a visitation queue
-UTILITY_DISTANCE_ALPHA = 1.0  # cost-utility exponent: utility = gain / (dist + eps)^alpha
+UTILITY_DISTANCE_ALPHA = 2.5  # cost-utility exponent: utility = gain / (dist + eps)^alpha
+                                # steep on purpose -- a far, big-gain frontier should NOT
+                                # be able to outrank a close, modest one; this forces
+                                # genuinely local, expanding-outward exploration instead
+                                # of jumping to whichever single spot has the most reward
+MAX_CANDIDATE_RADIUS_M = 8.0    # ignore frontier clusters farther than this from the
+                                 # robot entirely this cycle -- they'll be picked up
+                                 # naturally once the robot is actually near them
 
 # ---- EDIT HERE to inject externally-supplied "must visit" / high-priority targets ----
 # Each entry: (x, y, bonus, yaw). `bonus` is subtracted from every edge cost *into*
@@ -86,12 +93,27 @@ DUMMY_TARGETS = [
 # from the occupancy grid.
 MIN_TREE_CLUSTER_CELLS = 4        # ignore tiny obstacle-noise blobs, not real trees
 TREE_INSPECTION_RADIUS_M = 1.0    # standoff distance for the 3 circular viewpoints
-TREE_VIEWPOINT_BONUS = 8.0        # priority of tree viewpoints vs frontier viewpoints
+MAX_TREE_CLUSTER_DIAMETER_M = 0.8  # cap a single "tree" cluster's bounding-box span --
+                                    # trees close enough together to be 8-connected in
+                                    # the occupancy grid would otherwise merge into one
+                                    # giant blob treated as a single tree. Capping growth
+                                    # here forces them to split back into separate,
+                                    # per-trunk-sized detections.
+TREE_VIEWPOINT_BONUS = 2.5        # priority of tree viewpoints vs frontier viewpoints
+                                   # (in the same meters-equivalent unit as
+                                   # MAX_FRONTIER_BONUS_M -- keep these comparable)
+MAX_FRONTIER_BONUS_M = 2.5         # cap on how much a frontier viewpoint's raw info-gain
+                                    # can bias the TSP route, expressed in the same units
+                                    # as real travel distance (meters). Gain is normalized
+                                    # to [0, MAX_FRONTIER_BONUS_M] before entering the cost
+                                    # matrix -- this keeps it a tiebreaker between similarly-
+                                    # distant options, not something that can override real
+                                    # distance and send the robot on a long detour.
 TREE_DEDUP_RADIUS_M = 2.0         # don't re-detect/re-target a tree we've already handled
                                    # (loose enough to tolerate cluster centroid jitter as
                                    # the octomap updates between scans of the same tree)
-MAX_NEW_TREES_PER_CYCLE = 2       # rate-limit how many new trees get queued per 2s tick
-MAX_DUMMY_TARGETS = 24            # hard cap so a burst of detections can't pile up
+MAX_NEW_TREES_PER_CYCLE = 4       # rate-limit how many new trees get queued per 2s tick
+MAX_DUMMY_TARGETS = 36            # hard cap so a burst of detections can't pile up
                                    # unboundedly and trap the robot locally
 
 
@@ -246,6 +268,16 @@ class FrontierExplorer(Node):
         # dummy targets -- this is the actual coverage-path-guided visitation
         # ordering, not just a greedy nearest-neighbor approximation.
         top = sorted(candidates, key=lambda c: c['utility'], reverse=True)[:self.top_k_candidates]
+        # Rescale each candidate's info-gain into a small, bounded, meters-equivalent
+        # "tsp_bonus" so it nudges the route toward higher-gain viewpoints without
+        # ever being able to outweigh real travel distance (see MAX_FRONTIER_BONUS_M).
+        # Using raw gain here (not 'utility', which already divides by distance --
+        # dividing by distance twice would double-penalize far candidates).
+        if top:
+            gains = [c['gain'] for c in top]
+            max_gain = max(gains) if max(gains) > 0 else 1
+            for c in top:
+                c['tsp_bonus'] = (c['gain'] / max_gain) * MAX_FRONTIER_BONUS_M
         ordered_nodes = self.solve_viewpoint_order(top, robot_xy)
         self.goal_queue = [(x, y, yaw) for (x, y, _bonus, yaw) in ordered_nodes]
 
@@ -398,13 +430,22 @@ class FrontierExplorer(Node):
 
     # ---------- stand-in perception: treat obstacle clusters as "detected trees" ----------
 
-    def detect_obstacle_clusters(self, data):
+    def detect_obstacle_clusters(self, data, grid_msg):
         """Same connected-component approach as detect_frontier_clusters, but over
         OCCUPIED cells instead of frontier cells. This is the stand-in for a real
         perception pipeline's tree-trunk detector -- swap this out for an actual
         detection callback later; everything downstream (viewpoint generation,
-        TSP injection) stays the same either way."""
+        TSP injection) stays the same either way.
+
+        Cluster growth is capped at MAX_TREE_CLUSTER_DIAMETER_M: a cell whose
+        addition would push the cluster's bounding box past that span is left
+        unvisited rather than absorbed, so it seeds its own separate cluster on
+        a later iteration. Without this, trees close enough together to touch
+        in the occupancy grid would merge into one giant blob and get treated
+        as a single "tree" -- this splits them back into per-trunk detections."""
         h, w = data.shape
+        res = grid_msg.info.resolution
+        max_span_cells = max(1, int(round(MAX_TREE_CLUSTER_DIAMETER_M / res)))
         occ_mask = (data >= OCC_THRESHOLD)
         visited = np.zeros_like(occ_mask)
         clusters = []
@@ -416,18 +457,28 @@ class FrontierExplorer(Node):
                 continue
             q = deque([start])
             visited[start] = True
-            cluster = []
+            cluster = [start]
+            min_row = max_row = start[0]
+            min_col = max_col = start[1]
             while q:
                 cy, cx = q.popleft()
-                cluster.append((cy, cx))
                 for dy in (-1, 0, 1):
                     for dx in (-1, 0, 1):
                         if dx == 0 and dy == 0:
                             continue
                         ny, nx = cy + dy, cx + dx
-                        if (ny, nx) in occ_cells and not visited[ny, nx]:
-                            visited[ny, nx] = True
-                            q.append((ny, nx))
+                        if (ny, nx) not in occ_cells or visited[ny, nx]:
+                            continue
+                        new_min_row, new_max_row = min(min_row, ny), max(max_row, ny)
+                        new_min_col, new_max_col = min(min_col, nx), max(max_col, nx)
+                        if (new_max_row - new_min_row > max_span_cells or
+                                new_max_col - new_min_col > max_span_cells):
+                            continue  # would grow this cluster too big -- leave it
+                                      # unvisited so it seeds a separate cluster instead
+                        visited[ny, nx] = True
+                        cluster.append((ny, nx))
+                        min_row, max_row, min_col, max_col = new_min_row, new_max_row, new_min_col, new_max_col
+                        q.append((ny, nx))
             if len(cluster) >= MIN_TREE_CLUSTER_CELLS:
                 clusters.append(cluster)
         return clusters
@@ -460,7 +511,7 @@ class FrontierExplorer(Node):
         area doesn't dump dozens of targets into the solver in one tick."""
         if len(self.dummy_targets) >= MAX_DUMMY_TARGETS:
             return  # already have plenty queued, work through the backlog first
-        clusters = self.detect_obstacle_clusters(data)
+        clusters = self.detect_obstacle_clusters(data, grid_msg)
         new_trees_added = 0
         for cluster in clusters:
             if new_trees_added >= MAX_NEW_TREES_PER_CYCLE:
@@ -620,12 +671,16 @@ class FrontierExplorer(Node):
         n_no_clearance = 0
         n_too_close = 0
         n_out_of_bounds = 0
+        n_too_far = 0
 
         for cluster in clusters:
             cx, cy = self.cluster_centroid_world(cluster, grid_msg)
             if not self.in_bounds(cx, cy):
                 n_out_of_bounds += 1
                 continue
+            if math.hypot(cx - rx, cy - ry) > MAX_CANDIDATE_RADIUS_M:
+                n_too_far += 1
+                continue  # too far to consider this cycle -- keep exploration local
 
             goal = self.find_standoff_goal(data, grid_msg, cluster, robot_xy)
             if goal is None:
@@ -653,6 +708,7 @@ class FrontierExplorer(Node):
             self.get_logger().info(
                 f'{len(clusters)} frontier cluster(s) found but none selectable: '
                 f'{n_out_of_bounds} outside world bounds, '
+                f'{n_too_far} too far (>{MAX_CANDIDATE_RADIUS_M}m) this cycle, '
                 f'{n_no_clearance} failed obstacle clearance, '
                 f'{n_blacklisted} blacklisted from prior failures, '
                 f'{n_too_close} already at robot position.')
@@ -693,7 +749,7 @@ class FrontierExplorer(Node):
         the cost of every edge back into the depot."""
         nodes = [(robot_xy[0], robot_xy[1], 0.0, 0.0)]
         for c in candidates:
-            nodes.append((c['x'], c['y'], c['utility'], c['yaw']))
+            nodes.append((c['x'], c['y'], c.get('tsp_bonus', 0.0), c['yaw']))
         for (tx, ty, tbonus, tyaw) in self.dummy_targets:
             if self.is_blacklisted(tx, ty):
                 continue  # this exact point already failed -- don't resend it forever
