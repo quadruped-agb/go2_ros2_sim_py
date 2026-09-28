@@ -73,7 +73,7 @@ docker exec -it simulator bash
 source /opt/ros/jazzy/setup.bash
 source /root/ws/install/setup.bash
 
-ros2 bag record --use-sim-time   -o /root/ws/src/bags/$(date +%Y%m%d_%H%M%S)   --topics   /clock   /tf   /tf_static   /robot1/points/points_timed   /robot1/imu_plugin/out   /robot1/odom   /robot1/color/image_raw   /robot1/cmd_vel 
+ros2 bag record --use-sim-time   -o /root/ws/src/bags/$(date +%Y%m%d_%H%M%S)   --topics   /clock   /tf   /tf_static   /robot1/livox/points_filtered   /robot1/imu_plugin/out   /robot1/odom   /robot1/cmd_vel 
 
 then after recording, do CTRL-C
 then to play, run:

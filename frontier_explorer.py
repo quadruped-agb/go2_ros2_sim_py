@@ -40,7 +40,8 @@ from rclpy.qos import QoSDurabilityPolicy, QoSProfile, QoSReliabilityPolicy
 from nav_msgs.msg import OccupancyGrid, Path
 from geometry_msgs.msg import PoseStamped, Point
 from visualization_msgs.msg import Marker, MarkerArray
-from nav2_msgs.action import NavigateToPose
+from nav2_msgs.action import NavigateToPose, Spin
+from builtin_interfaces.msg import Duration
 from tf2_ros import Buffer, TransformListener
 
 from ortools.constraint_solver import routing_enums_pb2
@@ -154,6 +155,7 @@ class FrontierExplorer(Node):
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
         self.nav_client = ActionClient(self, NavigateToPose, 'navigate_to_pose')
+        self.spin_client = ActionClient(self, Spin, 'spin')
 
         self.latest_map = None
         self.exploring = False
@@ -167,6 +169,8 @@ class FrontierExplorer(Node):
         # to inject externally-supplied target locations into the TSP solve --
         # see DUMMY_TARGETS and solve_viewpoint_order for how bonus is used.
         self.dummy_targets = list(DUMMY_TARGETS)
+        self.current_goal_handle = None  # tracked so a newly detected tree mid-sweep
+                                          # can cancel the in-flight goal and replan
         # (x, y) centroids of trees we've already generated inspection viewpoints
         # for, so we don't regenerate the same 3 viewpoints every 2s forever.
         self.processed_trees = []
@@ -201,34 +205,66 @@ class FrontierExplorer(Node):
             self.get_logger().warn(f'tf lookup {self.global_frame}->{self.base_frame} failed: {e}')
             return None
 
-    def explore_step(self):
-        if self.exploring:
-            return  # a NavigateToPose goal is already in flight
+    def get_robot_yaw(self):
+        try:
+            t = self.tf_buffer.lookup_transform(
+                self.global_frame, self.base_frame, rclpy.time.Time())
+            q = t.transform.rotation
+            return math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))
+        except Exception as e:
+            self.get_logger().warn(f'tf lookup for yaw failed: {e}')
+            return None
 
-        # Drain the current visitation queue before doing any new detection work --
-        # this is what makes the robot commit to a locally coherent sweep instead of
-        # re-planning myopically after every single goal.
-        if self.goal_queue:
-            next_goal = self.goal_queue.pop(0)
-            self.send_nav_goal(next_goal)
+    def explore_step(self):
+        new_tree_count = 0
+        if self.latest_map is not None:
+            grid_msg = self.latest_map
+            w, h = grid_msg.info.width, grid_msg.info.height
+            data = np.array(grid_msg.data, dtype=np.int8).reshape(h, w)
+            # Stand-in perception pipeline: pick up newly-seen "trees" (obstacle
+            # clusters) every single cycle, unconditionally -- this now runs even
+            # while a goal is in flight (self.exploring == True), which is exactly
+            # what lets a newly detected tree interrupt an in-progress sweep below,
+            # rather than only being noticed once the current sweep finishes.
+            new_tree_count = self.scan_for_new_trees(data, grid_msg)
+
+        if new_tree_count > 0 and self.exploring and self.current_goal_handle is not None:
+            self.get_logger().info(
+                f'{new_tree_count} new tree(s) detected -- canceling current goal '
+                f'to replan with them included')
+            self.goal_queue.clear()
+            self.current_goal_handle.cancel_goal_async()
+            # don't touch self.exploring here -- it stays True until
+            # goal_result_cb sees the CANCELED result and re-triggers
+            # explore_step itself once the cancellation actually completes
             return
+
+        if self.exploring:
+            return  # a goal (nav or spin) is in flight and wasn't interrupted above
+
+        if new_tree_count > 0 and self.goal_queue:
+            self.get_logger().info(
+                f'{new_tree_count} new tree(s) detected -- clearing queued sweep '
+                f'to replan with them included')
+            self.goal_queue.clear()
+            # fall straight through to a fresh replan below
 
         if self.latest_map is None:
             self.get_logger().info('waiting for map...', throttle_duration_sec=5.0)
             return
 
+        # Drain the current visitation queue before doing any new planning work --
+        # this is what makes the robot commit to a locally coherent sweep instead of
+        # re-planning myopically after every single goal. Detection above still runs
+        # every cycle regardless; only planning/re-ordering is deferred.
+        if self.goal_queue:
+            next_goal = self.goal_queue.pop(0)
+            self.send_nav_goal(next_goal)
+            return
+
         robot_xy = self.get_robot_pose_xy()
         if robot_xy is None:
             return
-
-        grid_msg = self.latest_map
-        w, h = grid_msg.info.width, grid_msg.info.height
-        data = np.array(grid_msg.data, dtype=np.int8).reshape(h, w)
-
-        # Stand-in perception pipeline: pick up newly-seen "trees" (obstacle
-        # clusters) every cycle, regardless of frontier state, and queue their
-        # inspection viewpoints as dummy targets.
-        self.scan_for_new_trees(data, grid_msg)
 
         clusters = self.detect_frontier_clusters(grid_msg, data)
         if not clusters:
@@ -404,7 +440,11 @@ class FrontierExplorer(Node):
             line.points.append(Point(x=robot_xy[0], y=robot_xy[1], z=0.1))
             for (gx, gy, gyaw) in self.goal_queue:
                 line.points.append(Point(x=gx, y=gy, z=0.1))
-                markers.markers.append(make_arrow(gx, gy, gyaw, 1.0, 0.0, 1.0, 'planned_route'))
+                draw_yaw = gyaw if gyaw is not None else 0.0  # ordinary frontier
+                    # goals carry no commanded orientation anymore (see send_nav_goal);
+                    # default to 0.0 for the arrow's display only, this has no
+                    # bearing on actual navigation
+                markers.markers.append(make_arrow(gx, gy, draw_yaw, 1.0, 0.0, 1.0, 'planned_route'))
             markers.markers.append(line)
 
         self.marker_pub.publish(markers)
@@ -508,9 +548,12 @@ class FrontierExplorer(Node):
         """Run every cycle: find obstacle clusters the explorer hasn't seen before,
         generate their 3 circular inspection viewpoints, and inject them as dummy
         targets. Rate-limited to MAX_NEW_TREES_PER_CYCLE so a big already-mapped
-        area doesn't dump dozens of targets into the solver in one tick."""
+        area doesn't dump dozens of targets into the solver in one tick.
+        Returns the count of newly detected trees this cycle (0 if none), so the
+        caller can decide whether to interrupt an in-progress sweep to react to
+        them right away instead of waiting for the current sweep to finish."""
         if len(self.dummy_targets) >= MAX_DUMMY_TARGETS:
-            return  # already have plenty queued, work through the backlog first
+            return 0  # already have plenty queued, work through the backlog first
         clusters = self.detect_obstacle_clusters(data, grid_msg)
         new_trees_added = 0
         for cluster in clusters:
@@ -528,6 +571,7 @@ class FrontierExplorer(Node):
                 self.get_logger().info(
                     f'Detected tree at ({tx:.2f}, {ty:.2f}) -- queued '
                     f'{len(viewpoints)}/3 inspection viewpoint(s) around it.')
+        return new_trees_added
 
     # ---------- frontier detection ----------
 
@@ -616,8 +660,14 @@ class FrontierExplorer(Node):
                 gx = wx + ux * standoff
                 gy = wy + uy * standoff
                 if self.in_bounds(gx, gy) and self.has_clearance(data, grid_msg, gx, gy, MIN_OBSTACLE_CLEARANCE_M):
-                    yaw = math.atan2(wy - gy, wx - gx)
-                    return (gx, gy, yaw)
+                    # Ordinary frontier goals no longer carry any commanded final
+                    # orientation -- the NavigateToPose orientation is computed
+                    # fresh at send time from the live travel direction (see
+                    # send_nav_goal), and no post-arrival alignment spin is needed
+                    # for plain exploration goals (only tree-inspection viewpoints
+                    # get one, see generate_tree_viewpoints).
+                    align_yaw = None
+                    return (gx, gy, align_yaw)
         return None
 
     def cluster_centroid_world(self, cluster, grid_msg: OccupancyGrid):
@@ -810,41 +860,62 @@ class FrontierExplorer(Node):
             self.get_logger().warn('navigate_to_pose action server not available yet')
             return
 
-        wx, wy, yaw = xyyaw
+        wx, wy, align_yaw = xyyaw
         pose = PoseStamped()
         pose.header.frame_id = self.global_frame
         pose.header.stamp = self.get_clock().now().to_msg()
         pose.pose.position.x = wx
         pose.pose.position.y = wy
-        pose.pose.orientation.z = math.sin(yaw / 2.0)
-        pose.pose.orientation.w = math.cos(yaw / 2.0)
+
+        # Orientation is computed fresh, right now, from the actual travel
+        # direction -- not baked in during planning. This is naturally close to
+        # whatever heading the robot arrives with, so DWB has nothing to fight
+        # over near the goal. align_yaw (if set) is handled separately, AFTER
+        # arrival, via a dedicated Spin -- see goal_result_cb.
+        robot_now = self.get_robot_pose_xy()
+        if robot_now is not None and math.hypot(wx - robot_now[0], wy - robot_now[1]) > 1e-3:
+            travel_yaw = math.atan2(wy - robot_now[1], wx - robot_now[0])
+        else:
+            travel_yaw = 0.0
+        pose.pose.orientation.z = math.sin(travel_yaw / 2.0)
+        pose.pose.orientation.w = math.cos(travel_yaw / 2.0)
 
         goal_msg = NavigateToPose.Goal()
         goal_msg.pose = pose
 
         self.exploring = True
         self.get_logger().info(
-            f'Sending exploration goal: ({wx:.2f}, {wy:.2f}, yaw={math.degrees(yaw):.0f}deg) '
+            f'Sending exploration goal: ({wx:.2f}, {wy:.2f}) '
             f'[{len(self.goal_queue)} more queued]')
         future = self.nav_client.send_goal_async(goal_msg)
-        future.add_done_callback(lambda f: self.goal_response_cb(f, (wx, wy)))
+        future.add_done_callback(lambda f: self.goal_response_cb(f, (wx, wy, align_yaw)))
 
-    def goal_response_cb(self, future, xy):
+    def goal_response_cb(self, future, goal_info):
+        wx, wy, align_yaw = goal_info
         goal_handle = future.result()
         if not goal_handle.accepted:
             self.get_logger().warn('Goal rejected by nav2')
-            self.failed_goals.append(xy)
+            self.failed_goals.append((wx, wy))
             self.exploring = False
+            self.explore_step()
             return
         result_future = goal_handle.get_result_async()
-        result_future.add_done_callback(lambda f: self.goal_result_cb(f, xy))
+        self.current_goal_handle = goal_handle
+        result_future.add_done_callback(lambda f: self.goal_result_cb(f, goal_info))
 
-    def goal_result_cb(self, future, xy):
+    def goal_result_cb(self, future, goal_info):
+        gx, gy, align_yaw = goal_info
         status = future.result().status
-        gx, gy = xy
-        if status != 4:  # 4 = SUCCEEDED
-            self.get_logger().warn(f'Goal to {xy} did not succeed (status={status}), blacklisting')
-            self.failed_goals.append(xy)
+        self.current_goal_handle = None
+        if status == 5:  # CANCELED -- we did this ourselves to react to a newly
+                          # detected tree, not a real navigation failure. Don't
+                          # blacklist a perfectly good point just because we
+                          # interrupted it.
+            self.get_logger().info(
+                f'Goal to ({gx:.2f},{gy:.2f}) canceled -- interrupted for a new tree detection')
+        elif status != 4:  # 4 = SUCCEEDED, anything else here is a genuine failure
+            self.get_logger().warn(f'Goal to ({gx:.2f},{gy:.2f}) did not succeed (status={status}), blacklisting')
+            self.failed_goals.append((gx, gy))
             self.goal_queue.clear()  # abandon the rest of this sweep, replan fresh next step
             # remove it from dummy_targets too -- a permanently unreachable viewpoint
             # shouldn't sit there forever as dead weight
@@ -852,12 +923,60 @@ class FrontierExplorer(Node):
                 t for t in self.dummy_targets if math.hypot(t[0] - gx, t[1] - gy) > 0.3
             ]
         else:
-            self.get_logger().info(f'Reached frontier goal {xy}')
+            self.get_logger().info(f'Reached frontier goal ({gx:.2f}, {gy:.2f})')
             self.visited_frontier_count += 1
             self.dummy_targets = [
                 t for t in self.dummy_targets if math.hypot(t[0] - gx, t[1] - gy) > 0.3
             ]
+            if align_yaw is not None:
+                self.send_align_spin(align_yaw)
+                return  # exploring stays True until the spin finishes -- see spin_result_cb
         self.exploring = False
+        self.explore_step()  # dispatch the next queued goal immediately, don't
+                              # wait for the next timer tick -- this is the main
+                              # lever for reducing dead time between goals
+
+    def send_align_spin(self, target_absolute_yaw):
+        """Post-arrival, decoupled in-place rotation to face a specific direction
+        (e.g. into a tree for inspection). Using Nav2's own Spin behavior here
+        instead of baking the orientation into the NavigateToPose goal -- Spin is
+        a dedicated turn-in-place action, not subject to DWB's combined position+
+        orientation goal-checker fight that was causing the jitter/spiral."""
+        current_yaw = self.get_robot_yaw()
+        if current_yaw is None:
+            self.get_logger().warn('Could not read current yaw, skipping alignment spin')
+            self.exploring = False
+            return
+        # wrap the relative rotation into [-pi, pi] so Spin takes the short way round
+        rel = math.atan2(math.sin(target_absolute_yaw - current_yaw),
+                          math.cos(target_absolute_yaw - current_yaw))
+
+        if not self.spin_client.wait_for_server(timeout_sec=2.0):
+            self.get_logger().warn('spin action server not available, skipping alignment')
+            self.exploring = False
+            return
+
+        goal_msg = Spin.Goal()
+        goal_msg.target_yaw = rel
+        goal_msg.time_allowance = Duration(sec=8)
+        self.get_logger().info(f'Aligning to face target: spinning {math.degrees(rel):.0f} degrees')
+        future = self.spin_client.send_goal_async(goal_msg)
+        future.add_done_callback(self.spin_response_cb)
+
+    def spin_response_cb(self, future):
+        goal_handle = future.result()
+        if not goal_handle.accepted:
+            self.get_logger().warn('Alignment spin rejected')
+            self.exploring = False
+            return
+        result_future = goal_handle.get_result_async()
+        result_future.add_done_callback(self.spin_result_cb)
+
+    def spin_result_cb(self, future):
+        # Whether the spin fully succeeded or timed out/partially completed, we're
+        # done with this goal either way -- release the lock and move on.
+        self.exploring = False
+        self.explore_step()
 
 
 def main():

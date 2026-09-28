@@ -103,16 +103,20 @@ controller_server:
       debug_trajectory_details: True
       min_vel_x: 0.0
       min_vel_y: 0.0
-      max_vel_x: 0.18
+      #max_vel_x: 0.18  
+      max_vel_x: 0.4
       max_vel_y: 0.0
       max_vel_theta: 0.5
       min_speed_xy: 0.0
-      max_speed_xy: 0.18
+      #max_speed_xy: 0.18
+      max_speed_xy: 0.4
       min_speed_theta: 0.0
-      acc_lim_x: 2.5
+      #acc_lim_x: 2.5
+      acc_lim_x: 3.0
       acc_lim_y: 0.0
       acc_lim_theta: 3.2
-      decel_lim_x: -2.5
+      #decel_lim_x: -2.5
+      decel_lim_x: -3.0
       decel_lim_y: 0.0
       decel_lim_theta: -3.2
       vx_samples: 20
@@ -128,7 +132,7 @@ controller_server:
       limit_vel_cmd_in_traj: False
       stateful: True
       critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
-      BaseObstacle.scale: 20.0
+      BaseObstacle.scale: 4.0
       PathAlign.scale: 32.0
       GoalAlign.scale: 24.0
       PathAlign.forward_point_distance: 0.1
@@ -261,6 +265,7 @@ local_costmap:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 4.0
         inflation_radius: 0.45
+        #inflation_radius: 0.30
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
         enabled: true
@@ -312,6 +317,7 @@ global_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 4.0
+        #cost_scaling_factor: 6.0
         inflation_radius: 0.45
       always_send_full_costmap: true
 
