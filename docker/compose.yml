@@ -69,6 +69,7 @@ services:
     volumes:
       - ./cyclonedds.xml:/cyclonedds.xml
       - ./../:/root/ws/src/
+      - /home/administrator/navigation_pipeline:/root/oracle
 
   glim:
     <<: *nvidia
