@@ -1,3 +1,7 @@
+To run graphical GUI applications inside a Docker container using the X11 display server:
+xhost +local:docker
+
+
 Use this to get octomap each time:
 docker exec -it simulator bash -c "apt-get update && apt-get install -y ros-jazzy-octomap-server ros-jazzy-octomap-msgs ros-jazzy-octomap-ros"
 
