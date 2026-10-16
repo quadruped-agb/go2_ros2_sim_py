@@ -33,14 +33,14 @@ GZ_DIFFUSE   = os.path.join(GZ_MATERIALS, 'bc_moss_rock_diffuse.png')
 GZ_NORMAL    = os.path.join(GZ_MATERIALS, 'bc_moss_rock_normal.png')
 GZ_TERRAIN_MESH = os.path.join(SCRIPT_DIR, 'materials', 'meshes', 'terrain.obj')
 
-TERRAIN_W   = 50.0
-TERRAIN_H   = 50.0
+TERRAIN_W   = 10.0
+TERRAIN_H   = 10.0
 TERRAIN_Z   = 1.0
 TERRAIN_POS = (0, 0, 0)
 TEXTURE_SIZE = 4
 
-X_MIN, X_MAX = -20, 20
-Y_MIN, Y_MAX = -20, 20
+X_MIN, X_MAX = -5, 5
+Y_MIN, Y_MAX = -5, 5
 
 OUTPUT_FILE = os.path.join(SCRIPT_DIR, 'world', 'cafe.world')
 
@@ -69,7 +69,7 @@ def terrain_z(wx, wy):
 #   "include" → (model_uri,)          uses <include>
 #   "apriltag"→ (model_uri, roll, pitch, yaw, z_offset_override)
 # ─────────────────────────────────────────────
-NUM_TREES_SPRUCE = 60
+NUM_TREES_SPRUCE = 10
 TREES_SPRUCE = []
 for i in range(NUM_TREES_SPRUCE):
 	x = random.uniform(X_MIN, X_MAX)
@@ -78,7 +78,7 @@ for i in range(NUM_TREES_SPRUCE):
 	entry = ("spruce_tree_"+str(i), x, y, 0, scale)
 	TREES_SPRUCE.append(entry)
 	
-NUM_TREES_FIR = 60
+NUM_TREES_FIR = 10
 TREES_FIR = []
 for i in range(NUM_TREES_FIR):
 	x = random.uniform(X_MIN, X_MAX)

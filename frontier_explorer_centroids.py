@@ -29,6 +29,7 @@ Pipeline (upgraded from the greedy-nearest MVP):
 """
 
 import math
+import time
 from collections import deque
 
 import numpy as np
@@ -70,7 +71,12 @@ UTILITY_DISTANCE_ALPHA = 2.5  # cost-utility exponent: utility = gain / (dist + 
 MAX_CANDIDATE_RADIUS_M = 8.0    # ignore frontier clusters farther than this from the
                                  # robot entirely this cycle -- they'll be picked up
                                  # naturally once the robot is actually near them
+MAX_CANDIDATE_RADIUS_LIMIT_M = 60.0   # how far the search may widen when nothing local works
+RADIUS_EXPAND_FACTOR = 1.5
+BLACKLIST_TTL_S = 90.0                # a failed goal is forgotten after this long
 
+CENTROID_MOVED = 2.0 #TO UPDATE VIEWPOINTS IF THE CENTROID MOVED MORE THAN THIS METERS
+CENTROID_BOUND_MARGIN_M = 1.0   # centroids farther than this outside the plot bounds are discarded
 # ---- EDIT HERE to inject externally-supplied "must visit" / high-priority targets ----
 # Each entry: (x, y, bonus, yaw). `bonus` is subtracted from every edge cost *into*
 # that node in the TSP cost matrix (see build_cost_matrix), so a bigger bonus makes
@@ -83,7 +89,8 @@ DUMMY_TARGETS = [
     # (x, y, bonus, yaw)  -- example, delete/replace with real targets:
     # (3.5, -2.0, 50.0, 0.0),
 ]
-MIN_TREE_OBS = 3   # a tree must be re-detected this many times first
+# MIN_TREE_OBS = 3   # a tree must be re-detected this many times first
+MIN_TREE_OBS = 10
 
 # ---- Stand-in "perception pipeline" for tree inspection ----
 # Until the real perception pipeline exists, every occupied-cell cluster the
@@ -116,8 +123,12 @@ TREE_DEDUP_RADIUS_M = 2.0         # don't re-detect/re-target a tree we've alrea
                                    # (loose enough to tolerate cluster centroid jitter as
                                    # the octomap updates between scans of the same tree)
 MAX_NEW_TREES_PER_CYCLE = 4       # rate-limit how many new trees get queued per 2s tick
-MAX_DUMMY_TARGETS = 36            # hard cap so a burst of detections can't pile up
+# MAX_DUMMY_TARGETS = 36            # hard cap so a burst of detections can't pile up
                                    # unboundedly and trap the robot locally
+MAX_DUMMY_TARGETS = 300
+TREE_DUP_DIST_M = 0.75
+FRONTIER_VISITED_RADIUS_M = 1.0
+MAX_VP_RETRIES = 3
 
 class FrontierExplorer(Node):
     def __init__(self):
@@ -127,10 +138,10 @@ class FrontierExplorer(Node):
         self.declare_parameter('robot_base_frame', 'base_link')
         self.declare_parameter('global_frame', 'map')
         self.declare_parameter('min_frontier_cells', MIN_FRONTIER_CELLS)
-        self.declare_parameter('bounds_min_x', -25.0)
-        self.declare_parameter('bounds_max_x', 25.0)
-        self.declare_parameter('bounds_min_y', -25.0)
-        self.declare_parameter('bounds_max_y', 25.0)
+        self.declare_parameter('bounds_min_x', -5.0)
+        self.declare_parameter('bounds_max_x', 5.0)
+        self.declare_parameter('bounds_min_y', -5.0)
+        self.declare_parameter('bounds_max_y', 5.0)
         self.declare_parameter('sensor_range_m', SENSOR_RANGE_M)
         self.declare_parameter('top_k_candidates', TOP_K_CANDIDATES)
 
@@ -152,6 +163,7 @@ class FrontierExplorer(Node):
                                                 self.trees_cb, tree_qos)
         self.tree_rows = np.zeros((0, 7))
         self.processed_gids = set()
+        self.tree_vps = {}      # gid -> (tx, ty, r, [viewpoint tuples])
 
         qos = QoSProfile(depth=5)
         qos.reliability = QoSReliabilityPolicy.RELIABLE
@@ -169,7 +181,12 @@ class FrontierExplorer(Node):
         self.latest_map = None
         self.exploring = False
         self.failed_goals = []       # list of (x, y) we shouldn't retry near
+        self.candidate_radius = MAX_CANDIDATE_RADIUS_M
+        self.last_n_too_far = 0
+        self.visited_vps = []
         self.visited_frontier_count = 0
+        self.visited_frontier_goals = []
+        self.fail_counts = {}
         self.goal_queue = []         # ordered list of (x, y, yaw) still to visit this "sweep"
         self.stall_count = 0         # consecutive cycles where no candidate was selectable
         self.declared_complete = False
@@ -185,6 +202,9 @@ class FrontierExplorer(Node):
         self.processed_trees = []
 
         self.timer = self.create_timer(2.0, self.explore_step)
+        self.start_time = time.monotonic()
+        self.complete_elapsed = None       # set when exploration is declared complete
+        self.n_centroids_outside = 0
 
         # --- Visualization: robot trail (nav_msgs/Path, native RViz Path display) ---
         self.path_pub = self.create_publisher(Path, 'frontier_explorer/robot_path', 10)
@@ -225,9 +245,19 @@ class FrontierExplorer(Node):
             return None
 
     #callback for centroids subscription, stores the data in a numpy array for later use
-    def trees_cb(self, msg):
-        self.tree_rows = np.array(msg.data, dtype=np.float64).reshape(-1, 7)
 
+    def trees_cb(self, msg):
+        rows = np.array(msg.data, dtype=np.float64).reshape(-1, 7)
+        if len(rows):
+            m = CENTROID_BOUND_MARGIN_M
+            ok = ((rows[:, 1] >= self.bounds_min_x - m) & (rows[:, 1] <= self.bounds_max_x + m) &
+                (rows[:, 2] >= self.bounds_min_y - m) & (rows[:, 2] <= self.bounds_max_y + m))
+            self.n_centroids_outside = int((~ok).sum())
+            if (~ok).any():
+                self.get_logger().info(
+                    f'rejected centroids: {rows[~ok][:, 1:3].round(1).tolist()}', once=True)
+            rows = rows[ok]
+        self.tree_rows = rows
     def explore_step(self):
         new_tree_count = 0
         if self.latest_map is not None:
@@ -241,26 +271,26 @@ class FrontierExplorer(Node):
             # rather than only being noticed once the current sweep finishes.
             new_tree_count = self.scan_for_new_trees(data, grid_msg)
 
-        if new_tree_count > 0 and self.exploring and self.current_goal_handle is not None:
-            self.get_logger().info(
-                f'{new_tree_count} new tree(s) detected -- canceling current goal '
-                f'to replan with them included')
-            self.goal_queue.clear()
-            self.current_goal_handle.cancel_goal_async()
-            # don't touch self.exploring here -- it stays True until
-            # goal_result_cb sees the CANCELED result and re-triggers
-            # explore_step itself once the cancellation actually completes
-            return
+        # if new_tree_count > 0 and self.exploring and self.current_goal_handle is not None:
+        #     self.get_logger().info(
+        #         f'{new_tree_count} new tree(s) detected -- canceling current goal '
+        #         f'to replan with them included')
+        #     self.goal_queue.clear()
+        #     self.current_goal_handle.cancel_goal_async()
+        #     # don't touch self.exploring here -- it stays True until
+        #     # goal_result_cb sees the CANCELED result and re-triggers
+        #     # explore_step itself once the cancellation actually completes
+        #     return
 
         if self.exploring:
             return  # a goal (nav or spin) is in flight and wasn't interrupted above
 
-        if new_tree_count > 0 and self.goal_queue:
-            self.get_logger().info(
-                f'{new_tree_count} new tree(s) detected -- clearing queued sweep '
-                f'to replan with them included')
-            self.goal_queue.clear()
-            # fall straight through to a fresh replan below
+        # if new_tree_count > 0 and self.goal_queue:
+        #     self.get_logger().info(
+        #         f'{new_tree_count} new tree(s) detected -- clearing queued sweep '
+        #         f'to replan with them included')
+        #     self.goal_queue.clear()
+        #     # fall straight through to a fresh replan below
 
         if self.latest_map is None:
             self.get_logger().info('waiting for map...', throttle_duration_sec=5.0)
@@ -278,6 +308,15 @@ class FrontierExplorer(Node):
         robot_xy = self.get_robot_pose_xy()
         if robot_xy is None:
             return
+        
+        tour = self.plan_tree_tour(robot_xy)
+        if tour:
+            self.goal_queue = tour
+            self.get_logger().info(f'Planned tree tour: {len(tour)} viewpoints')
+            self.publish_planning_markers(robot_xy)
+            return
+
+        
 
         clusters = self.detect_frontier_clusters(grid_msg, data)
         if not clusters:
@@ -295,6 +334,16 @@ class FrontierExplorer(Node):
             return
 
         candidates = self.score_candidates(clusters, data, grid_msg, robot_xy)
+        while (not candidates and self.last_n_too_far > 0
+            and self.candidate_radius < MAX_CANDIDATE_RADIUS_LIMIT_M):
+            self.candidate_radius = min(self.candidate_radius * RADIUS_EXPAND_FACTOR,
+                                        MAX_CANDIDATE_RADIUS_LIMIT_M)
+            self.get_logger().info(
+                f'No local frontier selectable -- widening search to '
+                f'{self.candidate_radius:.1f} m')
+            candidates = self.score_candidates(clusters, data, grid_msg, robot_xy)
+        self.candidate_radius = MAX_CANDIDATE_RADIUS_M   # go back to local search next replan
+
         self.last_candidates = candidates
         if not candidates:
             if self.dummy_targets:
@@ -334,6 +383,53 @@ class FrontierExplorer(Node):
             f'Planned a {len(self.goal_queue)}-viewpoint sweep from '
             f'{len(candidates)} candidates (of {len(clusters)} frontier clusters).')
         self.publish_planning_markers(robot_xy)
+
+    def tsp_order(self, pts, start):
+        """Order of pts (list of (x,y)) as an open path from start."""
+        n = len(pts) + 1
+        nodes = [start] + list(pts)
+        m = [[int(round(math.hypot(a[0]-b[0], a[1]-b[1]) * 1000)) for b in nodes] for a in nodes]
+        for i in range(n):
+            m[i][0] = 0                      # open path
+        mgr = pywrapcp.RoutingIndexManager(n, 1, 0)
+        rt = pywrapcp.RoutingModel(mgr)
+        cb = rt.RegisterTransitCallback(lambda i, j: m[mgr.IndexToNode(i)][mgr.IndexToNode(j)])
+        rt.SetArcCostEvaluatorOfAllVehicles(cb)
+        p = pywrapcp.DefaultRoutingSearchParameters()
+        p.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
+        p.local_search_metaheuristic = routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
+        p.time_limit.FromMilliseconds(500)
+        sol = rt.SolveWithParameters(p)
+        if sol is None:
+            return list(range(len(pts)))
+        order, idx = [], rt.Start(0)
+        while not rt.IsEnd(idx):
+            k = mgr.IndexToNode(idx)
+            if k:
+                order.append(k - 1)
+            idx = sol.Value(rt.NextVar(idx))
+        return order
+
+    def plan_tree_tour(self, robot_xy):
+        """Goals for all pending tree viewpoints, one whole tree at a time."""
+        trees = []
+        for gid, (tx, ty, r, vps) in self.tree_vps.items():
+            pend = [v for v in vps if v in self.dummy_targets
+                    and not self.is_blacklisted(v[0], v[1])]
+            if pend:
+                trees.append((tx, ty, pend))
+        if not trees:
+            return []
+        order = self.tsp_order([(t[0], t[1]) for t in trees], robot_xy)
+        goals, cur = [], robot_xy
+        for k in order:
+            _, _, pend = trees[k]
+            while pend:                       # nearest-first around this tree
+                v = min(pend, key=lambda v: math.hypot(v[0]-cur[0], v[1]-cur[1]))
+                pend.remove(v)
+                goals.append((v[0], v[1], v[3]))
+                cur = (v[0], v[1])
+        return goals
 
     def record_trail(self):
         """Append the robot's current position to a growing nav_msgs/Path so RViz
@@ -430,8 +526,11 @@ class FrontierExplorer(Node):
         for c in self.last_candidates:
             markers.markers.append(make_sphere(c['x'], c['y'], 0.2, 0.4, 1.0))
 
-        # detected tree centroids (orange) -- compare against real trunks in Gazebo
-        for (tx, ty) in self.processed_trees:
+        # # detected tree centroids (orange) -- compare against real trunks in Gazebo
+        # for (tx, ty) in self.processed_trees:
+        #     markers.markers.append(make_cube(tx, ty, 1.0, 0.5, 0.0))
+
+        for (tx, ty, _r, _v) in self.tree_vps.values():
             markers.markers.append(make_cube(tx, ty, 1.0, 0.5, 0.0))
 
         # pending tree-inspection viewpoints (green arrows, oriented)
@@ -475,6 +574,7 @@ class FrontierExplorer(Node):
         if self.declared_complete:
             return  # already announced, don't spam every 2s
         self.declared_complete = True
+        self.complete_elapsed = time.monotonic() - self.start_time
         pct = self.compute_coverage_pct(data)
         self.get_logger().info(
             f'Exploration complete: {reason}. '
@@ -536,6 +636,50 @@ class FrontierExplorer(Node):
                 clusters.append(cluster)
         return clusters
 
+    def coverage_in_plot(self):
+        """% of the plot area (the bounds) that is known (free or occupied)."""
+        msg = self.latest_map
+        if msg is None:
+            return None
+        res = msg.info.resolution
+        ox, oy = msg.info.origin.position.x, msg.info.origin.position.y
+        h, w = msg.info.height, msg.info.width
+        data = np.array(msg.data, dtype=np.int8).reshape(h, w)
+        xs = ox + (np.arange(w) + 0.5) * res
+        ys = oy + (np.arange(h) + 0.5) * res
+        in_x = (xs >= self.bounds_min_x) & (xs <= self.bounds_max_x)
+        in_y = (ys >= self.bounds_min_y) & (ys <= self.bounds_max_y)
+        known = np.count_nonzero(data[np.ix_(in_y, in_x)] != UNKNOWN)
+        total = ((self.bounds_max_x - self.bounds_min_x) / res *
+                (self.bounds_max_y - self.bounds_min_y) / res)
+        return min(100.0, 100.0 * known / total)
+
+    def print_final_stats(self):
+        # print(), not get_logger(): on Ctrl-C the rclpy context is already down
+        elapsed = time.monotonic() - self.start_time
+        cov_plot = self.coverage_in_plot()
+        cov_grid = (self.compute_coverage_pct(
+            np.array(self.latest_map.data, dtype=np.int8)) if self.latest_map else None)
+        print()
+        print("=" * 60)
+        print("EXPLORATION STATS")
+        print("=" * 60)
+        print("run time (wall clock)  : %.1f s (%.1f min)" % (elapsed, elapsed / 60))
+        if self.complete_elapsed is not None:
+            print("declared complete at   : %.1f s" % self.complete_elapsed)
+        else:
+            print("declared complete at   : not reached")
+        if cov_plot is not None:
+            print("coverage of plot area  : %.1f %%" % cov_plot)
+            print("coverage of map grid   : %.1f %%" % cov_grid)
+        else:
+            print("coverage               : no map received")
+        print("viewpoints visited     : %d" % self.visited_frontier_count)
+        print("trees accepted         : %d" % len(self.tree_vps))
+        print("centroids out of range : %d (at last registry update)" % self.n_centroids_outside)
+        print("failed goals (active)  : %d" % len(self.failed_goals))
+        print("=" * 60)
+
     def is_known_tree(self, tx, ty):
         for (px, py) in self.processed_trees:
             if math.hypot(tx - px, ty - py) < TREE_DEDUP_RADIUS_M:
@@ -547,14 +691,14 @@ class FrontierExplorer(Node):
         tree at (tx, ty), each pulled back to TREE_INSPECTION_RADIUS_M and checked
         for real clearance -- a tree with a close neighbor may only yield 1 or 2
         valid viewpoints instead of 3, which is fine, we just skip the blocked ones."""
-        standoff = r + TREE_INSPECTION_RADIUS_M
+        standoff = min(r, 0.6) + TREE_INSPECTION_RADIUS_M
 
         viewpoints = []
         for k in range(3):
             angle = k * (2.0 * math.pi / 3.0)
             gx = tx + standoff * math.cos(angle)
             gy = ty + standoff * math.sin(angle)
-            if self.in_bounds(gx, gy) and self.has_clearance(data, grid_msg, gx, gy, MIN_OBSTACLE_CLEARANCE_M):
+            if self.in_bounds_margin(gx, gy, 0.5) and self.has_clearance(data, grid_msg, gx, gy, MIN_OBSTACLE_CLEARANCE_M):
                 yaw = math.atan2(ty - gy, tx - gx)  # face into the tree
                 viewpoints.append((gx, gy, yaw))
         return viewpoints
@@ -589,20 +733,56 @@ class FrontierExplorer(Node):
     #     return new_trees_added
 
 
+    # def scan_for_new_trees(self, data, grid_msg):
+    #     if len(self.dummy_targets) >= MAX_DUMMY_TARGETS:
+    #         return 0
+    #     new_trees_added = 0
+    #     for gid, tx, ty, r, status, disc, n_obs in self.tree_rows:
+    #         gid = int(gid)
+    #         if gid in self.processed_gids or n_obs < MIN_TREE_OBS:
+    #             continue
+    #         if new_trees_added >= MAX_NEW_TREES_PER_CYCLE:
+    #             break
+    #         self.processed_gids.add(gid)
+    #         self.processed_trees.append((tx, ty))      # keeps the orange cubes working
+    #         for (gx, gy, yaw) in self.generate_tree_viewpoints(data, grid_msg, float(tx), float(ty), float(r)):                
+    #             self.dummy_targets.append((gx, gy, TREE_VIEWPOINT_BONUS, yaw))
+    #         new_trees_added += 1
+    #     return new_trees_added
     def scan_for_new_trees(self, data, grid_msg):
-        if len(self.dummy_targets) >= MAX_DUMMY_TARGETS:
-            return 0
+        current = {int(row[0]): row for row in self.tree_rows}
+
+        for gid in list(self.tree_vps):
+            tx0, ty0, _r0, vps = self.tree_vps[gid]
+            row = current.get(gid)
+            if row is None or math.hypot(row[1] - tx0, row[2] - ty0) > CENTROID_MOVED:
+                self.dummy_targets = [t for t in self.dummy_targets if t not in vps]
+                del self.tree_vps[gid]
+                self.processed_gids.discard(gid)
+
         new_trees_added = 0
         for gid, tx, ty, r, status, disc, n_obs in self.tree_rows:
             gid = int(gid)
             if gid in self.processed_gids or n_obs < MIN_TREE_OBS:
                 continue
+            if any(math.hypot(tx - t[0], ty - t[1]) < TREE_DUP_DIST_M
+                for t in self.tree_vps.values()):
+                self.processed_gids.add(gid)          # true duplicate
+                continue
             if new_trees_added >= MAX_NEW_TREES_PER_CYCLE:
                 break
+            raw = self.generate_tree_viewpoints(data, grid_msg, float(tx), float(ty), float(r))
+            if not raw:
+                self.get_logger().info(
+                    f'tree #{gid} at ({tx:.1f},{ty:.1f}) r={r:.1f}: no valid viewpoints',
+                    throttle_duration_sec=10.0)
+                continue                               # no clearance now; retry next cycle
+            vps = [(gx, gy, TREE_VIEWPOINT_BONUS, yaw) for (gx, gy, yaw) in raw
+                if not any(math.hypot(gx - vx, gy - vy) < 0.75
+                            for vx, vy in self.visited_vps)]
             self.processed_gids.add(gid)
-            self.processed_trees.append((tx, ty))      # keeps the orange cubes working
-            for (gx, gy, yaw) in self.generate_tree_viewpoints(data, grid_msg, float(tx), float(ty), float(r)):                
-                self.dummy_targets.append((gx, gy, TREE_VIEWPOINT_BONUS, yaw))
+            self.dummy_targets.extend(vps)
+            self.tree_vps[gid] = (float(tx), float(ty), float(r), vps)
             new_trees_added += 1
         return new_trees_added
 
@@ -653,6 +833,10 @@ class FrontierExplorer(Node):
         return (self.bounds_min_x <= wx <= self.bounds_max_x and
                 self.bounds_min_y <= wy <= self.bounds_max_y)
 
+    def in_bounds_margin(self, x, y, m):
+        return (self.bounds_min_x - m <= x <= self.bounds_max_x + m and
+                self.bounds_min_y - m <= y <= self.bounds_max_y + m)
+
     def has_clearance(self, data, grid_msg, wx, wy, min_clearance_m):
         res = grid_msg.info.resolution
         ox = grid_msg.info.origin.position.x
@@ -692,7 +876,7 @@ class FrontierExplorer(Node):
             for standoff in standoffs:
                 gx = wx + ux * standoff
                 gy = wy + uy * standoff
-                if self.in_bounds(gx, gy) and self.has_clearance(data, grid_msg, gx, gy, MIN_OBSTACLE_CLEARANCE_M):
+                if self.in_bounds_margin(gx, gy, 0.5) and self.has_clearance(data, grid_msg, gx, gy, MIN_OBSTACLE_CLEARANCE_M):
                     # Ordinary frontier goals no longer carry any commanded final
                     # orientation -- the NavigateToPose orientation is computed
                     # fresh at send time from the live travel direction (see
@@ -755,13 +939,14 @@ class FrontierExplorer(Node):
         n_too_close = 0
         n_out_of_bounds = 0
         n_too_far = 0
+        n_visited = 0
 
         for cluster in clusters:
             cx, cy = self.cluster_centroid_world(cluster, grid_msg)
             if not self.in_bounds(cx, cy):
                 n_out_of_bounds += 1
                 continue
-            if math.hypot(cx - rx, cy - ry) > MAX_CANDIDATE_RADIUS_M:
+            if math.hypot(cx - rx, cy - ry) > self.candidate_radius:
                 n_too_far += 1
                 continue  # too far to consider this cycle -- keep exploration local
 
@@ -773,6 +958,10 @@ class FrontierExplorer(Node):
 
             if self.is_blacklisted(gx, gy):
                 n_blacklisted += 1
+                continue
+            if any(math.hypot(gx - vx, gy - vy) < FRONTIER_VISITED_RADIUS_M
+                for vx, vy in self.visited_frontier_goals):
+                n_visited += 1
                 continue
             dist = math.hypot(gx - rx, gy - ry)
             if dist < 0.3:
@@ -791,10 +980,12 @@ class FrontierExplorer(Node):
             self.get_logger().info(
                 f'{len(clusters)} frontier cluster(s) found but none selectable: '
                 f'{n_out_of_bounds} outside world bounds, '
-                f'{n_too_far} too far (>{MAX_CANDIDATE_RADIUS_M}m) this cycle, '
+                f'{n_too_far} too far (>{self.candidate_radius:.1f}m) this cycle, '
                 f'{n_no_clearance} failed obstacle clearance, '
                 f'{n_blacklisted} blacklisted from prior failures, '
+                f'{n_visited} already visited, '
                 f'{n_too_close} already at robot position.')
+        self.last_n_too_far = n_too_far
 
         return candidates
 
@@ -881,7 +1072,10 @@ class FrontierExplorer(Node):
         return order
 
     def is_blacklisted(self, x, y):
-        for (bx, by) in self.failed_goals:
+        now = time.monotonic()
+        self.failed_goals = [(bx, by, t) for (bx, by, t) in self.failed_goals
+                            if now - t < BLACKLIST_TTL_S]
+        for (bx, by, _t) in self.failed_goals:
             if math.hypot(x - bx, y - by) < REPLAN_ON_FAILURE_BLACKLIST_M:
                 return True
         return False
@@ -928,46 +1122,48 @@ class FrontierExplorer(Node):
         goal_handle = future.result()
         if not goal_handle.accepted:
             self.get_logger().warn('Goal rejected by nav2')
-            self.failed_goals.append((wx, wy))
+            #self.failed_goals.append((wx, wy))
+            self.failed_goals.append((wx, wy, time.monotonic()))
             self.exploring = False
             self.explore_step()
             return
         result_future = goal_handle.get_result_async()
         self.current_goal_handle = goal_handle
+        
         result_future.add_done_callback(lambda f: self.goal_result_cb(f, goal_info))
 
     def goal_result_cb(self, future, goal_info):
         gx, gy, align_yaw = goal_info
         status = future.result().status
         self.current_goal_handle = None
-        if status == 5:  # CANCELED -- we did this ourselves to react to a newly
-                          # detected tree, not a real navigation failure. Don't
-                          # blacklist a perfectly good point just because we
-                          # interrupted it.
+        if status == 5:  # CANCELED
             self.get_logger().info(
-                f'Goal to ({gx:.2f},{gy:.2f}) canceled -- interrupted for a new tree detection')
-        elif status != 4:  # 4 = SUCCEEDED, anything else here is a genuine failure
-            self.get_logger().warn(f'Goal to ({gx:.2f},{gy:.2f}) did not succeed (status={status}), blacklisting')
-            self.failed_goals.append((gx, gy))
-            self.goal_queue.clear()  # abandon the rest of this sweep, replan fresh next step
-            # remove it from dummy_targets too -- a permanently unreachable viewpoint
-            # shouldn't sit there forever as dead weight
-            self.dummy_targets = [
-                t for t in self.dummy_targets if math.hypot(t[0] - gx, t[1] - gy) > 0.3
-            ]
-        else:
-            self.get_logger().info(f'Reached frontier goal ({gx:.2f}, {gy:.2f})')
+                f'Goal to ({gx:.2f},{gy:.2f}) canceled')
+        elif status != 4:  # failure
+            self.get_logger().warn(
+                f'Goal to ({gx:.2f},{gy:.2f}) did not succeed (status={status}), blacklisting')
+            self.failed_goals.append((gx, gy, time.monotonic()))
+            self.goal_queue.clear()
+            key = (round(gx, 1), round(gy, 1))
+            self.fail_counts[key] = self.fail_counts.get(key, 0) + 1
+            if self.fail_counts[key] >= MAX_VP_RETRIES:
+                self.dummy_targets = [t for t in self.dummy_targets
+                                      if math.hypot(t[0] - gx, t[1] - gy) > 0.3]
+        else:  # succeeded
+            self.get_logger().info(f'Reached goal ({gx:.2f}, {gy:.2f})')
             self.visited_frontier_count += 1
             self.dummy_targets = [
                 t for t in self.dummy_targets if math.hypot(t[0] - gx, t[1] - gy) > 0.3
             ]
             if align_yaw is not None:
+                self.visited_vps.append((gx, gy))          # tree viewpoint only
                 self.send_align_spin(align_yaw)
-                return  # exploring stays True until the spin finishes -- see spin_result_cb
+                return
+            else:
+                self.visited_frontier_goals.append((gx, gy))  # frontier goal only
         self.exploring = False
-        self.explore_step()  # dispatch the next queued goal immediately, don't
-                              # wait for the next timer tick -- this is the main
-                              # lever for reducing dead time between goals
+        self.explore_step()
+
 
     def send_align_spin(self, target_absolute_yaw):
         """Post-arrival, decoupled in-place rotation to face a specific direction
@@ -1020,9 +1216,13 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        try:
+            node.print_final_stats()
+        except Exception as e:
+            print("could not print stats:", e)
         node.destroy_node()
-        rclpy.shutdown()
-
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

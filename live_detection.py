@@ -96,7 +96,7 @@ class Cfg:
     # Radius of the map window that Algorithm 1 runs over each iteration,
     # centred on the sensor. Bounds the per-iteration CCL cost and keeps
     # detection inside the region where the ground grid is well populated.
-    det_radius = 10.0        # m, horizontal, from the sensor origin
+    det_radius = 5.0        # m, horizontal, from the sensor origin
 
     # The sim only models the Mid-360's 0.1 m blind zone, so the robot's own
     # body and legs are returned and land squarely in the slab band -- on the

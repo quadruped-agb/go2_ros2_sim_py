@@ -1,0 +1,63 @@
+# FAST-LIO2 for the Gazebo Go2 sim. Kept separate from glim_config/ -- GLIM is
+# untouched and both can run at once off the same topics for comparison.
+#
+# Derived from the sim, not from the FAST-LIO README:
+#   lid_topic      measured at 9.65 Hz. NOT points_filtered, which exists but
+#                  publishes nothing (0 Hz).
+#   imu_topic      measured at ~197 Hz.
+#   lidar_type 2   gazebo_sim/scripts/pointcloud_stamper.py names the per-point
+#                  field "time", which is FAST-LIO's Velodyne branch. Ouster's
+#                  branch looks for "t", Livox's wants CustomMsg.
+#   timestamp_unit 2  that stamper writes scan_period_us = 100000.0, i.e.
+#                  MICROSECONDS. Wrong here and motion undistortion is off by 1e6.
+#   extrinsic_T    go2_description/xacro/robot.xacro: imu_joint puts imu_link at
+#                  base_link's origin (xyz 0 0 0, rpy 0 0 0), and laser_scan puts
+#                  laser_frame at xyz 0.035 0.02 0.065, rpy 0 0 0. FAST-LIO wants
+#                  the LiDAR pose IN THE IMU FRAME, so that offset is it and the
+#                  rotation is identity. GLIM auto-detects this; FAST-LIO does not.
+/**:
+    ros__parameters:
+        feature_extract_enable: false
+        point_filter_num: 3
+        max_iteration: 3
+        filter_size_surf: 0.5
+        filter_size_map: 0.5
+        cube_side_length: 1000.0
+        runtime_pos_log_enable: false
+        map_file_path: "./test.pcd"
+
+        common:
+            lid_topic:  "/robot1/points/points_timed"
+            imu_topic:  "/robot1/imu_plugin/out"
+            time_sync_en: false
+            time_offset_lidar_to_imu: 0.0
+
+        preprocess:
+            lidar_type: 2
+            scan_line:  4
+            blind: 0.5
+            timestamp_unit: 2
+            scan_rate: 10
+
+        mapping:
+            acc_cov: 0.1
+            gyr_cov: 0.1
+            b_acc_cov: 0.0001
+            b_gyr_cov: 0.0001
+            fov_degree: 360.0
+            det_range: 100.0
+            extrinsic_est_en: false
+            extrinsic_T: [ 0.035, 0.02, 0.065 ]
+            extrinsic_R: [ 1.0, 0.0, 0.0,
+                           0.0, 1.0, 0.0,
+                           0.0, 0.0, 1.0 ]
+
+        publish:
+            path_en: true
+            scan_publish_en: true
+            dense_publish_en: false
+            scan_bodyframe_pub_en: false
+
+        pcd_save:
+            pcd_save_en: false
+            interval: -1
