@@ -100,7 +100,7 @@ MAX_TREE_CLUSTER_DIAMETER_M = 0.8  # cap a single "tree" cluster's bounding-box 
                                     # giant blob treated as a single tree. Capping growth
                                     # here forces them to split back into separate,
                                     # per-trunk-sized detections.
-TREE_VIEWPOINT_BONUS = 0        #2.5 initially # priority of tree viewpoints vs frontier viewpoints
+TREE_VIEWPOINT_BONUS = 2.5        # priority of tree viewpoints vs frontier viewpoints
                                    # (in the same meters-equivalent unit as
                                    # MAX_FRONTIER_BONUS_M -- keep these comparable)
 MAX_FRONTIER_BONUS_M = 2.5         # cap on how much a frontier viewpoint's raw info-gain

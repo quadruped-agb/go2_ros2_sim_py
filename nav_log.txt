@@ -1,0 +1,866 @@
+name: sensor_stream_reader
+msg: 'frame 8290: FULL PIPELINE (arrival -> centroids) took 0.1295 s'
+name: sensor_stream_reader
+msg: 'frame 8290: 5 components | same-tree #21 (d=0.00m), #9 (d=0.02m), #7 (d=0.03m), #6 (d=0.04m), #5 (d=0.13m) | trees=16 (map=19803...'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8300: FULL PIPELINE (arrival -> centroids) took 0.1189 s'
+name: sensor_stream_reader
+msg: 'frame 8300: 5 components | same-tree #5 (d=0.00m), #7 (d=0.00m), #21 (d=0.00m), #9 (d=0.02m), #6 (d=0.04m) | trees=16 (map=19856...'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8310: FULL PIPELINE (arrival -> centroids) took 0.1009 s'
+name: sensor_stream_reader
+msg: 'frame 8310: 7 components | same-tree #4 (d=0.00m), #6 (d=0.00m), #5 (d=0.00m), #7 (d=0.00m), #21 (d=0.00m), #9 (d=0.02m), #14 (d...'
+name: rviz_trees
+msg: 'cycle 820 (frame 8270): 3 accepted, 16 in registry, map 308 cells'
+name: rviz_trees
+msg: 'cycle 821 (frame 8280): 4 accepted, 16 in registry, map 308 cells'
+name: rviz_trees
+msg: 'cycle 822 (frame 8290): 5 accepted, 16 in registry, map 308 cells'
+name: rviz_trees
+msg: 'cycle 823 (frame 8300): 5 accepted, 16 in registry, map 308 cells'
+name: rviz_trees
+msg: 'cycle 824 (frame 8310): 7 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8320: FULL PIPELINE (arrival -> centroids) took 0.1417 s'
+name: sensor_stream_reader
+msg: 'frame 8320: 7 components | same-tree #4 (d=0.00m), #6 (d=0.00m), #5 (d=0.00m), #21 (d=0.00m), #7 (d=0.01m), #9 (d=0.01m), #14 (d...'
+name: rviz_trees
+msg: 'cycle 825 (frame 8320): 7 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8330: FULL PIPELINE (arrival -> centroids) took 0.1094 s'
+name: sensor_stream_reader
+msg: 'frame 8330: 7 components | same-tree #4 (d=0.00m), #6 (d=0.00m), #14 (d=0.00m), #5 (d=0.00m), #7 (d=0.00m), #9 (d=0.00m), #21 (d...'
+name: rviz_trees
+msg: 'cycle 826 (frame 8330): 7 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8340: FULL PIPELINE (arrival -> centroids) took 0.1706 s'
+name: sensor_stream_reader
+msg: 'frame 8340: 7 components | same-tree #4 (d=0.00m), #6 (d=0.00m), #14 (d=0.00m), #5 (d=0.00m), #21 (d=0.00m), #7 (d=0.01m), #9 (d...'
+name: rviz_trees
+msg: 'cycle 827 (frame 8340): 7 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8350: FULL PIPELINE (arrival -> centroids) took 0.1213 s'
+name: sensor_stream_reader
+msg: 'frame 8350: 7 components | same-tree #4 (d=0.00m), #6 (d=0.00m), #14 (d=0.00m), #5 (d=0.00m), #9 (d=0.00m), #7 (d=0.01m), #21 (d...'
+name: rviz_trees
+msg: 'cycle 828 (frame 8350): 7 accepted, 16 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 8360: FULL PIPELINE (arrival -> centroids) took 0.1099 s'
+name: sensor_stream_reader
+msg: 'frame 8360: 7 components | same-tree #4 (d=0.00m), #6 (d=0.00m), #14 (d=0.00m), #5 (d=0.00m), #21 (d=0.00m), #7 (d=0.01m), #9 (d...'
+name: controller_server
+msg: Passing new path to controller.
+name: rviz_trees
+msg: 'cycle 829 (frame 8360): 7 accepted, 16 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 8370: FULL PIPELINE (arrival -> centroids) took 0.1392 s'
+name: sensor_stream_reader
+msg: 'frame 8370: 7 components | same-tree #6 (d=0.00m), #14 (d=0.00m), #5 (d=0.00m), #21 (d=0.00m), #9 (d=0.01m), #7 (d=0.02m), #4 (d...'
+name: controller_server
+msg: Passing new path to controller.
+name: rviz_trees
+msg: 'cycle 830 (frame 8370): 7 accepted, 16 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 8380: FULL PIPELINE (arrival -> centroids) took 0.1100 s'
+name: sensor_stream_reader
+msg: 'frame 8380: 6 components | same-tree #6 (d=0.00m), #14 (d=0.00m), #5 (d=0.00m), #21 (d=0.00m), #7 (d=0.01m), #9 (d=0.02m) | tree...'
+name: controller_server
+msg: Passing new path to controller.
+name: rviz_trees
+msg: 'cycle 831 (frame 8380): 6 accepted, 16 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 8390: FULL PIPELINE (arrival -> centroids) took 0.1597 s'
+name: sensor_stream_reader
+msg: 'frame 8390: 6 components | same-tree #6 (d=0.00m), #14 (d=0.00m), #9 (d=0.00m), #21 (d=0.00m), #5 (d=0.03m), #7 (d=0.07m) | tree...'
+name: controller_server
+msg: Passing new path to controller.
+name: rviz_trees
+msg: 'cycle 832 (frame 8390): 6 accepted, 16 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 8400: FULL PIPELINE (arrival -> centroids) took 0.1266 s'
+name: sensor_stream_reader
+msg: 'frame 8400: 5 components | same-tree #6 (d=0.00m), #21 (d=0.00m), #9 (d=0.02m), #7 (d=0.07m), #5 (d=0.10m) | trees=16 (map=19755...'
+name: controller_server
+msg: Passing new path to controller.
+name: rviz_trees
+msg: 'cycle 833 (frame 8400): 5 accepted, 16 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 8410: FULL PIPELINE (arrival -> centroids) took 0.0993 s'
+name: sensor_stream_reader
+msg: 'frame 8410: 4 components | same-tree #9 (d=0.00m), #21 (d=0.00m), #5 (d=0.05m), #7 (d=0.07m) | trees=16 (map=19737 cols)'
+name: rviz_trees
+msg: 'cycle 834 (frame 8410): 4 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8420: FULL PIPELINE (arrival -> centroids) took 0.1433 s'
+name: sensor_stream_reader
+msg: 'frame 8420: 4 components | same-tree #21 (d=0.00m), #9 (d=0.02m), #5 (d=0.04m), #7 (d=0.06m) | trees=16 (map=19750 cols)'
+name: rviz_trees
+msg: 'cycle 835 (frame 8420): 4 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8430: FULL PIPELINE (arrival -> centroids) took 0.1093 s'
+name: sensor_stream_reader
+msg: 'frame 8430: 4 components | same-tree #9 (d=0.00m), #21 (d=0.00m), #7 (d=0.02m), #5 (d=0.04m) | trees=16 (map=19769 cols)'
+name: rviz_trees
+msg: 'cycle 836 (frame 8430): 4 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8440: FULL PIPELINE (arrival -> centroids) took 0.1613 s'
+name: sensor_stream_reader
+msg: 'frame 8440: 4 components | same-tree #5 (d=0.00m), #9 (d=0.02m), #7 (d=0.02m), #21 (d=0.02m) | trees=16 (map=19772 cols)'
+name: rviz_trees
+msg: 'cycle 837 (frame 8440): 4 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8450: FULL PIPELINE (arrival -> centroids) took 0.0986 s'
+name: sensor_stream_reader
+msg: 'frame 8450: 4 components | same-tree #5 (d=0.00m), #21 (d=0.00m), #7 (d=0.00m), #9 (d=0.02m) | trees=16 (map=19789 cols)'
+name: rviz_trees
+msg: 'cycle 838 (frame 8450): 4 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8460: FULL PIPELINE (arrival -> centroids) took 0.1081 s'
+name: sensor_stream_reader
+msg: 'frame 8460: 4 components | same-tree #9 (d=0.00m), #21 (d=0.00m), #7 (d=0.01m), #5 (d=0.05m) | trees=16 (map=19824 cols)'
+name: rviz_trees
+msg: 'cycle 839 (frame 8460): 4 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8470: FULL PIPELINE (arrival -> centroids) took 0.1440 s'
+name: sensor_stream_reader
+msg: 'frame 8470: 4 components | same-tree #5 (d=0.00m), #9 (d=0.00m), #21 (d=0.00m), #7 (d=0.01m) | trees=16 (map=19925 cols)'
+name: rviz_trees
+msg: 'cycle 840 (frame 8470): 4 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: controller_server
+msg: Passing new path to controller.
+name: controller_server
+msg: Passing new path to controller.
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'DTM rebuild #43: 3.48 s over 19867 columns'
+name: sensor_stream_reader
+msg: 'frame 8480: FULL PIPELINE (arrival -> centroids) took 3.6167 s'
+name: sensor_stream_reader
+msg: 'frame 8480: 4 components | same-tree #9 (d=0.00m), #21 (d=0.00m), #7 (d=0.03m), #5 (d=0.03m) | trees=16 (map=19867 cols)'
+name: sensor_stream_reader
+msg: 'frame 8490: FULL PIPELINE (arrival -> centroids) took 0.1475 s'
+name: sensor_stream_reader
+msg: 'frame 8490: 5 components | same-tree #6 (d=0.00m), #5 (d=0.00m), #21 (d=0.00m), #7 (d=0.01m), #9 (d=0.02m) | trees=16 (map=19907...'
+name: controller_server
+msg: Passing new path to controller.
+name: rviz_trees
+msg: 'cycle 841 (frame 8480): 4 accepted, 16 in registry, map 308 cells'
+name: rviz_trees
+msg: 'cycle 842 (frame 8490): 5 accepted, 16 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 8500: FULL PIPELINE (arrival -> centroids) took 0.1069 s'
+name: sensor_stream_reader
+msg: 'frame 8500: 5 components | same-tree #6 (d=0.00m), #9 (d=0.00m), #7 (d=0.01m), #5 (d=0.02m), #21 (d=0.02m) | trees=16 (map=19915...'
+name: controller_server
+msg: Passing new path to controller.
+name: rviz_trees
+msg: 'cycle 843 (frame 8500): 5 accepted, 16 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 8510: FULL PIPELINE (arrival -> centroids) took 0.1054 s'
+name: sensor_stream_reader
+msg: 'frame 8510: 6 components | same-tree #7 (d=0.00m), #21 (d=0.00m), #5 (d=0.02m), #9 (d=0.02m), #6 (d=0.02m), #4 (d=0.04m) | trees...'
+name: rviz_trees
+msg: 'cycle 844 (frame 8510): 6 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8520: FULL PIPELINE (arrival -> centroids) took 0.1588 s'
+name: sensor_stream_reader
+msg: 'frame 8520: 7 components | same-tree #4 (d=0.00m), #5 (d=0.00m), #7 (d=0.00m), #9 (d=0.00m), #6 (d=0.02m), #21 (d=0.02m), #3 (d=...'
+name: rviz_trees
+msg: 'cycle 845 (frame 8520): 7 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8530: FULL PIPELINE (arrival -> centroids) took 0.1002 s'
+name: sensor_stream_reader
+msg: 'frame 8530: 8 components | same-tree #4 (d=0.00m), #5 (d=0.00m), #7 (d=0.00m), #21 (d=0.00m), #6 (d=0.02m), #9 (d=0.02m), #3 (d=...'
+name: rviz_trees
+msg: 'cycle 846 (frame 8530): 8 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8540: FULL PIPELINE (arrival -> centroids) took 0.1478 s'
+name: sensor_stream_reader
+msg: 'frame 8540: 8 components | same-tree #3 (d=0.00m), #4 (d=0.00m), #5 (d=0.00m), #7 (d=0.00m), #9 (d=0.02m), #6 (d=0.02m), #14 (d=...'
+name: rviz_trees
+msg: 'cycle 847 (frame 8540): 8 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8550: FULL PIPELINE (arrival -> centroids) took 0.1037 s'
+name: sensor_stream_reader
+msg: 'frame 8550: 8 components | same-tree #3 (d=0.00m), #4 (d=0.00m), #6 (d=0.00m), #5 (d=0.00m), #7 (d=0.00m), #21 (d=0.00m), #9 (d=...'
+name: rviz_trees
+msg: 'cycle 848 (frame 8550): 8 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8560: FULL PIPELINE (arrival -> centroids) took 0.1003 s'
+name: sensor_stream_reader
+msg: 'frame 8560: 8 components | same-tree #3 (d=0.00m), #4 (d=0.00m), #14 (d=0.00m), #5 (d=0.00m), #21 (d=0.00m), #7 (d=0.00m), #9 (d...'
+name: rviz_trees
+msg: 'cycle 849 (frame 8560): 8 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8570: FULL PIPELINE (arrival -> centroids) took 0.1490 s'
+name: sensor_stream_reader
+msg: 'frame 8570: 8 components | same-tree #3 (d=0.00m), #4 (d=0.00m), #5 (d=0.00m), #7 (d=0.00m), #9 (d=0.00m), #21 (d=0.00m), #6 (d=...'
+name: rviz_trees
+msg: 'cycle 850 (frame 8570): 8 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8580: FULL PIPELINE (arrival -> centroids) took 0.1037 s'
+name: sensor_stream_reader
+msg: 'frame 8580: 8 components | same-tree #3 (d=0.00m), #4 (d=0.00m), #14 (d=0.00m), #5 (d=0.00m), #9 (d=0.00m), #21 (d=0.00m), #7 (d...'
+name: rviz_trees
+msg: 'cycle 851 (frame 8580): 8 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8590: FULL PIPELINE (arrival -> centroids) took 0.1353 s'
+name: sensor_stream_reader
+msg: 'frame 8590: 8 components | same-tree #4 (d=0.00m), #6 (d=0.00m), #14 (d=0.00m), #5 (d=0.00m), #21 (d=0.00m), #9 (d=0.01m), #7 (d...'
+name: rviz_trees
+msg: 'cycle 852 (frame 8590): 8 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8600: FULL PIPELINE (arrival -> centroids) took 0.1198 s'
+name: sensor_stream_reader
+msg: 'frame 8600: 7 components | same-tree #4 (d=0.00m), #6 (d=0.00m), #5 (d=0.00m), #7 (d=0.00m), #21 (d=0.00m), #9 (d=0.01m), #14 (d...'
+name: rviz_trees
+msg: 'cycle 853 (frame 8600): 7 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8610: FULL PIPELINE (arrival -> centroids) took 0.1132 s'
+name: sensor_stream_reader
+msg: 'frame 8610: 5 components | same-tree #5 (d=0.00m), #7 (d=0.00m), #21 (d=0.00m), #9 (d=0.01m), #6 (d=0.02m) | trees=16 (map=19804...'
+name: rviz_trees
+msg: 'cycle 854 (frame 8610): 5 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8620: FULL PIPELINE (arrival -> centroids) took 0.1498 s'
+name: sensor_stream_reader
+msg: 'frame 8620: 5 components | same-tree #7 (d=0.00m), #21 (d=0.00m), #9 (d=0.01m), #5 (d=0.03m), #6 (d=0.04m) | trees=16 (map=19735...'
+name: rviz_trees
+msg: 'cycle 855 (frame 8620): 5 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8630: FULL PIPELINE (arrival -> centroids) took 0.1070 s'
+name: sensor_stream_reader
+msg: 'frame 8630: 4 components | same-tree #7 (d=0.00m), #21 (d=0.00m), #9 (d=0.02m), #5 (d=0.05m) | trees=16 (map=19655 cols)'
+name: rviz_trees
+msg: 'cycle 856 (frame 8630): 4 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8640: FULL PIPELINE (arrival -> centroids) took 0.1579 s'
+name: sensor_stream_reader
+msg: 'frame 8640: 4 components | same-tree #7 (d=0.00m), #9 (d=0.00m), #21 (d=0.02m), #5 (d=0.03m) | trees=16 (map=19533 cols)'
+name: rviz_trees
+msg: 'cycle 857 (frame 8640): 4 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8650: FULL PIPELINE (arrival -> centroids) took 0.1044 s'
+name: sensor_stream_reader
+msg: 'frame 8650: 4 components | same-tree #21 (d=0.00m), #7 (d=0.01m), #9 (d=0.02m), #5 (d=0.04m) | trees=16 (map=19553 cols)'
+name: rviz_trees
+msg: 'cycle 858 (frame 8650): 4 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8660: FULL PIPELINE (arrival -> centroids) took 0.1238 s'
+name: sensor_stream_reader
+msg: 'frame 8660: 4 components | same-tree #5 (d=0.00m), #7 (d=0.00m), #9 (d=0.00m), #21 (d=0.00m) | trees=16 (map=19608 cols)'
+name: rviz_trees
+msg: 'cycle 859 (frame 8660): 4 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8670: FULL PIPELINE (arrival -> centroids) took 0.1363 s'
+name: sensor_stream_reader
+msg: 'frame 8670: 4 components | same-tree #5 (d=0.00m), #9 (d=0.00m), #21 (d=0.00m), #7 (d=0.01m) | trees=16 (map=19680 cols)'
+name: rviz_trees
+msg: 'cycle 860 (frame 8670): 4 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: controller_server
+msg: Passing new path to controller.
+name: controller_server
+msg: Passing new path to controller.
+name: controller_server
+msg: Passing new path to controller.
+name: controller_server
+msg: Passing new path to controller.
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'DTM rebuild #44: 5.23 s over 19758 columns'
+name: sensor_stream_reader
+msg: 'frame 8680: FULL PIPELINE (arrival -> centroids) took 5.3573 s'
+name: sensor_stream_reader
+msg: 'frame 8680: 4 components | same-tree #21 (d=0.00m), #9 (d=0.01m), #7 (d=0.02m), #5 (d=0.03m) | trees=16 (map=19758 cols)'
+name: rviz_trees
+msg: 'cycle 861 (frame 8680): 4 accepted, 16 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 8690: FULL PIPELINE (arrival -> centroids) took 0.1483 s'
+name: sensor_stream_reader
+msg: 'frame 8690: 6 components | same-tree #4 (d=0.00m), #5 (d=0.00m), #21 (d=0.00m), #7 (d=0.00m), #9 (d=0.02m), #6 (d=0.04m) | trees...'
+name: rviz_trees
+msg: 'cycle 862 (frame 8690): 6 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8700: FULL PIPELINE (arrival -> centroids) took 0.1109 s'
+name: sensor_stream_reader
+msg: 'frame 8700: 6 components | same-tree #4 (d=0.00m), #5 (d=0.00m), #7 (d=0.00m), #9 (d=0.00m), #21 (d=0.00m), #6 (d=0.02m) | trees...'
+name: rviz_trees
+msg: 'cycle 863 (frame 8700): 6 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8710: FULL PIPELINE (arrival -> centroids) took 0.1104 s'
+name: sensor_stream_reader
+msg: 'frame 8710: 6 components | same-tree #4 (d=0.00m), #6 (d=0.00m), #5 (d=0.00m), #21 (d=0.00m), #7 (d=0.01m), #9 (d=0.02m) | trees...'
+name: rviz_trees
+msg: 'cycle 864 (frame 8710): 6 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8720: FULL PIPELINE (arrival -> centroids) took 0.1347 s'
+name: sensor_stream_reader
+msg: 'frame 8720: 6 components | same-tree #4 (d=0.00m), #6 (d=0.00m), #5 (d=0.00m), #21 (d=0.00m), #7 (d=0.01m), #9 (d=0.02m) | trees...'
+name: rviz_trees
+msg: 'cycle 865 (frame 8720): 6 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8730: FULL PIPELINE (arrival -> centroids) took 0.1121 s'
+name: sensor_stream_reader
+msg: 'frame 8730: 6 components | same-tree #4 (d=0.00m), #6 (d=0.00m), #5 (d=0.00m), #7 (d=0.00m), #9 (d=0.00m), #21 (d=0.00m) | trees...'
+name: rviz_trees
+msg: 'cycle 866 (frame 8730): 6 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8740: FULL PIPELINE (arrival -> centroids) took 0.1450 s'
+name: sensor_stream_reader
+msg: 'frame 8740: 6 components | same-tree #4 (d=0.00m), #6 (d=0.00m), #5 (d=0.00m), #9 (d=0.00m), #21 (d=0.00m), #7 (d=0.01m) | trees...'
+name: rviz_trees
+msg: 'cycle 867 (frame 8740): 6 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8750: FULL PIPELINE (arrival -> centroids) took 0.1032 s'
+name: sensor_stream_reader
+msg: 'frame 8750: 6 components | same-tree #4 (d=0.00m), #6 (d=0.00m), #5 (d=0.00m), #9 (d=0.00m), #21 (d=0.00m), #7 (d=0.01m) | trees...'
+name: rviz_trees
+msg: 'cycle 868 (frame 8750): 6 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8760: FULL PIPELINE (arrival -> centroids) took 0.1282 s'
+name: sensor_stream_reader
+msg: 'frame 8760: 6 components | same-tree #4 (d=0.00m), #6 (d=0.00m), #5 (d=0.00m), #7 (d=0.00m), #21 (d=0.00m), #9 (d=0.04m) | trees...'
+name: rviz_trees
+msg: 'cycle 869 (frame 8760): 6 accepted, 16 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 8770: FULL PIPELINE (arrival -> centroids) took 0.1477 s'
+name: sensor_stream_reader
+msg: 'frame 8770: 4 components | same-tree #4 (d=0.00m), #5 (d=0.00m), #7 (d=0.00m), #9 (d=0.02m) | trees=16 (map=19912 cols)'
+name: controller_server
+msg: Passing new path to controller.
+name: rviz_trees
+msg: 'cycle 870 (frame 8770): 4 accepted, 16 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 8780: FULL PIPELINE (arrival -> centroids) took 0.1000 s'
+name: sensor_stream_reader
+msg: 'frame 8780: 3 components | same-tree #5 (d=0.00m), #7 (d=0.00m), #9 (d=0.00m) | trees=16 (map=19901 cols)'
+name: controller_server
+msg: Passing new path to controller.
+name: rviz_trees
+msg: 'cycle 871 (frame 8780): 3 accepted, 16 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 8790: FULL PIPELINE (arrival -> centroids) took 0.1654 s'
+name: sensor_stream_reader
+msg: 'frame 8790: 3 components | same-tree #5 (d=0.00m), #7 (d=0.00m), #9 (d=0.04m) | trees=16 (map=19942 cols)'
+name: controller_server
+msg: Passing new path to controller.
+name: rviz_trees
+msg: 'cycle 872 (frame 8790): 3 accepted, 16 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 8800: FULL PIPELINE (arrival -> centroids) took 0.0979 s'
+name: sensor_stream_reader
+msg: 'frame 8800: 3 components | same-tree #5 (d=0.00m), #9 (d=0.00m), #7 (d=0.00m) | trees=16 (map=19982 cols)'
+name: rviz_trees
+msg: 'cycle 873 (frame 8800): 3 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8810: FULL PIPELINE (arrival -> centroids) took 0.1004 s'
+name: sensor_stream_reader
+msg: 'frame 8810: 3 components | same-tree #5 (d=0.00m), #9 (d=0.00m), #7 (d=0.01m) | trees=16 (map=20052 cols)'
+name: rviz_trees
+msg: 'cycle 874 (frame 8810): 3 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8820: FULL PIPELINE (arrival -> centroids) took 0.1474 s'
+name: sensor_stream_reader
+msg: 'frame 8820: 3 components | same-tree #5 (d=0.00m), #9 (d=0.00m), #7 (d=0.01m) | trees=16 (map=20068 cols)'
+name: rviz_trees
+msg: 'cycle 875 (frame 8820): 3 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8830: FULL PIPELINE (arrival -> centroids) took 0.1102 s'
+name: sensor_stream_reader
+msg: 'frame 8830: 3 components | same-tree #7 (d=0.00m), #9 (d=0.00m), #5 (d=0.02m) | trees=16 (map=20100 cols)'
+name: rviz_trees
+msg: 'cycle 876 (frame 8830): 3 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8840: FULL PIPELINE (arrival -> centroids) took 0.1553 s'
+name: sensor_stream_reader
+msg: 'frame 8840: 3 components | same-tree #9 (d=0.00m), #7 (d=0.02m), #5 (d=0.02m) | trees=16 (map=20163 cols)'
+name: rviz_trees
+msg: 'cycle 877 (frame 8840): 3 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8850: FULL PIPELINE (arrival -> centroids) took 0.1011 s'
+name: sensor_stream_reader
+msg: 'frame 8850: 3 components | same-tree #5 (d=0.00m), #7 (d=0.00m), #9 (d=0.03m) | trees=16 (map=20160 cols)'
+name: rviz_trees
+msg: 'cycle 878 (frame 8850): 3 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8860: FULL PIPELINE (arrival -> centroids) took 0.1626 s'
+name: sensor_stream_reader
+msg: 'frame 8860: 3 components | same-tree #5 (d=0.00m), #7 (d=0.00m), #9 (d=0.02m) | trees=16 (map=20147 cols)'
+name: rviz_trees
+msg: 'cycle 879 (frame 8860): 3 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8870: FULL PIPELINE (arrival -> centroids) took 0.1117 s'
+name: sensor_stream_reader
+msg: 'frame 8870: 3 components | same-tree #5 (d=0.00m), #7 (d=0.00m), #9 (d=0.00m) | trees=16 (map=20275 cols)'
+name: rviz_trees
+msg: 'cycle 880 (frame 8870): 3 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: controller_server
+msg: Passing new path to controller.
+name: controller_server
+msg: Passing new path to controller.
+name: controller_server
+msg: Passing new path to controller.
+name: controller_server
+msg: Passing new path to controller.
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'DTM rebuild #45: 5.49 s over 20270 columns'
+name: sensor_stream_reader
+msg: 'frame 8880: FULL PIPELINE (arrival -> centroids) took 5.6082 s'
+name: sensor_stream_reader
+msg: 'frame 8880: 3 components | same-tree #9 (d=0.00m), #7 (d=0.02m), #5 (d=0.02m) | trees=16 (map=20270 cols)'
+name: rviz_trees
+msg: 'cycle 881 (frame 8880): 3 accepted, 16 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 8890: FULL PIPELINE (arrival -> centroids) took 0.1464 s'
+name: sensor_stream_reader
+msg: 'frame 8890: 3 components | same-tree #5 (d=0.02m), #9 (d=0.04m), #7 (d=0.10m) | trees=16 (map=20253 cols)'
+name: controller_server
+msg: Passing new path to controller.
+name: rviz_trees
+msg: 'cycle 882 (frame 8890): 3 accepted, 16 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 8900: FULL PIPELINE (arrival -> centroids) took 0.1132 s'
+name: sensor_stream_reader
+msg: 'frame 8900: 3 components | same-tree #5 (d=0.02m), #9 (d=0.02m), #7 (d=0.11m) | trees=16 (map=20077 cols)'
+name: planner_server
+msg: Failed to create a plan from potential when a legal potential was found. This shouldn't happen.
+name: planner_server
+msg: 'GridBased plugin failed to plan from (5.60, -0.26) to (2.69, -2.36): "Failed to create plan with tolerance of: 1.000000"'
+name: planner_server
+msg: '[compute_path_to_pose] [ActionServer] Aborting handle.'
+name: global_costmap.global_costmap
+msg: Received request to clear entirely the global_costmap
+name: rviz_trees
+msg: 'cycle 883 (frame 8900): 3 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8910: FULL PIPELINE (arrival -> centroids) took 0.1505 s'
+name: sensor_stream_reader
+msg: 'frame 8910: 4 components | same-tree #9 (d=0.00m), #21 (d=0.00m), #7 (d=0.01m), #5 (d=0.03m) | trees=16 (map=19963 cols)'
+name: rviz_trees
+msg: 'cycle 884 (frame 8910): 4 accepted, 16 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 8920: FULL PIPELINE (arrival -> centroids) took 0.1049 s'
+name: sensor_stream_reader
+msg: 'frame 8920: 4 components | same-tree #5 (d=0.00m), #9 (d=0.00m), #21 (d=0.00m), #7 (d=0.01m) | trees=16 (map=19947 cols)'
+name: controller_server
+msg: Passing new path to controller.
+name: rviz_trees
+msg: 'cycle 885 (frame 8920): 4 accepted, 16 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 8930: FULL PIPELINE (arrival -> centroids) took 0.1404 s'
+name: sensor_stream_reader
+msg: 'frame 8930: 4 components | same-tree #5 (d=0.00m), #7 (d=0.00m), #9 (d=0.00m), #21 (d=0.00m) | trees=16 (map=19873 cols)'
+name: controller_server
+msg: Passing new path to controller.
+name: rviz_trees
+msg: 'cycle 886 (frame 8930): 4 accepted, 16 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 8940: FULL PIPELINE (arrival -> centroids) took 0.1504 s'
+name: sensor_stream_reader
+msg: 'frame 8940: 5 components | same-tree #21 (d=0.00m), #7 (d=0.01m), #6 (d=0.02m), #5 (d=0.03m), #9 (d=0.06m) | trees=16 (map=19929...'
+name: controller_server
+msg: Passing new path to controller.
+name: rviz_trees
+msg: 'cycle 887 (frame 8940): 5 accepted, 16 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 8950: FULL PIPELINE (arrival -> centroids) took 0.1096 s'
+name: sensor_stream_reader
+msg: 'frame 8950: 5 components | same-tree #6 (d=0.00m), #5 (d=0.00m), #9 (d=0.00m), #21 (d=0.00m), #7 (d=0.01m) | trees=16 (map=19872...'
+name: controller_server
+msg: Passing new path to controller.
+name: rviz_trees
+msg: 'cycle 888 (frame 8950): 5 accepted, 16 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 8960: FULL PIPELINE (arrival -> centroids) took 0.1551 s'
+name: sensor_stream_reader
+msg: 'frame 8960: 6 components | same-tree #6 (d=0.00m), #5 (d=0.00m), #7 (d=0.01m), #9 (d=0.02m), #21 (d=0.02m), #14 (d=0.03m) | tree...'
+name: controller_server
+msg: Passing new path to controller.
+name: rviz_trees
+msg: 'cycle 889 (frame 8960): 6 accepted, 16 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 8970: FULL PIPELINE (arrival -> centroids) took 0.1090 s'
+name: sensor_stream_reader
+msg: 'frame 8970: 6 components | same-tree #14 (d=0.00m), #7 (d=0.00m), #21 (d=0.00m), #6 (d=0.02m), #9 (d=0.02m), #5 (d=0.02m) | tree...'
+name: controller_server
+msg: Passing new path to controller.
+name: rviz_trees
+msg: 'cycle 890 (frame 8970): 6 accepted, 16 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 8980: FULL PIPELINE (arrival -> centroids) took 0.1029 s'
+name: sensor_stream_reader
+msg: 'frame 8980: 6 components | same-tree #6 (d=0.00m), #9 (d=0.00m), #21 (d=0.00m), #7 (d=0.01m), #5 (d=0.02m), #14 (d=0.06m) | tree...'
+name: rviz_trees
+msg: 'cycle 891 (frame 8980): 6 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 8990: FULL PIPELINE (arrival -> centroids) took 0.1526 s'
+name: sensor_stream_reader
+msg: 'frame 8990: 6 components | same-tree #14 (d=0.00m), #5 (d=0.00m), #9 (d=0.00m), #6 (d=0.02m), #21 (d=0.02m), #7 (d=0.03m) | tree...'
+name: rviz_trees
+msg: 'cycle 892 (frame 8990): 6 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 9000: FULL PIPELINE (arrival -> centroids) took 0.1087 s'
+name: sensor_stream_reader
+msg: 'frame 9000: 6 components | same-tree #6 (d=0.00m), #14 (d=0.00m), #5 (d=0.00m), #9 (d=0.00m), #21 (d=0.00m), #7 (d=0.01m) | tree...'
+name: rviz_trees
+msg: 'cycle 893 (frame 9000): 6 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 9010: FULL PIPELINE (arrival -> centroids) took 0.1632 s'
+name: sensor_stream_reader
+msg: 'frame 9010: 6 components | same-tree #6 (d=0.00m), #14 (d=0.00m), #5 (d=0.00m), #9 (d=0.00m), #21 (d=0.02m), #7 (d=0.03m) | tree...'
+name: rviz_trees
+msg: 'cycle 894 (frame 9010): 6 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 9020: FULL PIPELINE (arrival -> centroids) took 0.1021 s'
+name: sensor_stream_reader
+msg: 'frame 9020: 6 components | same-tree #6 (d=0.00m), #14 (d=0.00m), #5 (d=0.00m), #9 (d=0.00m), #21 (d=0.00m), #7 (d=0.01m) | tree...'
+name: rviz_trees
+msg: 'cycle 895 (frame 9020): 6 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 9030: FULL PIPELINE (arrival -> centroids) took 0.0987 s'
+name: sensor_stream_reader
+msg: 'frame 9030: 6 components | same-tree #6 (d=0.00m), #14 (d=0.00m), #5 (d=0.00m), #9 (d=0.00m), #21 (d=0.00m), #7 (d=0.02m) | tree...'
+name: rviz_trees
+msg: 'cycle 896 (frame 9030): 6 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 9040: FULL PIPELINE (arrival -> centroids) took 0.1623 s'
+name: sensor_stream_reader
+msg: 'frame 9040: 7 components | same-tree #14 (d=0.00m), #5 (d=0.00m), #9 (d=0.00m), #21 (d=0.00m), #6 (d=0.04m), #7 (d=0.20m) | NEW ...'
+name: rviz_trees
+msg: 'cycle 897 (frame 9040): 7 accepted, 17 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 9050: FULL PIPELINE (arrival -> centroids) took 0.1260 s'
+name: sensor_stream_reader
+msg: 'frame 9050: 7 components | same-tree #6 (d=0.00m), #14 (d=0.00m), #9 (d=0.00m), #21 (d=0.00m), #24 (d=0.03m), #5 (d=0.03m), #7 (...'
+name: rviz_trees
+msg: 'cycle 898 (frame 9050): 7 accepted, 17 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 9060: FULL PIPELINE (arrival -> centroids) took 0.1549 s'
+name: sensor_stream_reader
+msg: 'frame 9060: 6 components | same-tree #6 (d=0.00m), #14 (d=0.00m), #9 (d=0.00m), #21 (d=0.00m), #7 (d=0.06m), #5 (d=0.10m) | tree...'
+name: rviz_trees
+msg: 'cycle 899 (frame 9060): 6 accepted, 17 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 9070: FULL PIPELINE (arrival -> centroids) took 0.1511 s'
+name: sensor_stream_reader
+msg: 'frame 9070: 4 components | same-tree #6 (d=0.00m), #9 (d=0.00m), #21 (d=0.00m), #7 (d=0.05m) | trees=17 (map=19653 cols)'
+name: rviz_trees
+msg: 'cycle 900 (frame 9070): 4 accepted, 17 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: controller_server
+msg: Passing new path to controller.
+name: controller_server
+msg: Passing new path to controller.
+name: controller_server
+msg: Passing new path to controller.
+name: controller_server
+msg: Passing new path to controller.
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'DTM rebuild #46: 5.87 s over 19614 columns'
+name: sensor_stream_reader
+msg: 'frame 9080: FULL PIPELINE (arrival -> centroids) took 5.9777 s'
+name: sensor_stream_reader
+msg: 'frame 9080: 4 components | same-tree #9 (d=0.02m), #21 (d=0.02m), #6 (d=0.04m), #7 (d=0.05m) | trees=17 (map=19614 cols)'
+name: controller_server
+msg: Passing new path to controller.
+name: rviz_trees
+msg: 'cycle 901 (frame 9080): 4 accepted, 17 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 9090: FULL PIPELINE (arrival -> centroids) took 0.1685 s'
+name: sensor_stream_reader
+msg: 'frame 9090: 4 components | same-tree #21 (d=0.00m), #9 (d=0.03m), #5 (d=0.04m), #7 (d=0.26m) | overlap-merge #7<-#24 | trees=16 ...'
+name: rviz_trees
+msg: 'cycle 902 (frame 9090): 4 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 9100: FULL PIPELINE (arrival -> centroids) took 0.1026 s'
+name: sensor_stream_reader
+msg: 'frame 9100: 4 components | same-tree #9 (d=0.00m), #21 (d=0.00m), #7 (d=0.02m), #5 (d=0.02m) | trees=16 (map=19658 cols)'
+name: rviz_trees
+msg: 'cycle 903 (frame 9100): 4 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 9110: FULL PIPELINE (arrival -> centroids) took 0.1729 s'
+name: sensor_stream_reader
+msg: 'frame 9110: 5 components | same-tree #9 (d=0.00m), #21 (d=0.00m), #6 (d=0.05m), #7 (d=0.05m), #5 (d=0.09m) | trees=16 (map=19685...'
+name: rviz_trees
+msg: 'cycle 904 (frame 9110): 5 accepted, 16 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 9120: FULL PIPELINE (arrival -> centroids) took 0.1006 s'
+name: sensor_stream_reader
+msg: 'frame 9120: 5 components | same-tree #9 (d=0.00m), #21 (d=0.00m), #6 (d=0.03m), #7 (d=0.04m), #5 (d=0.05m) | trees=16 (map=19637...'
+name: rviz_trees
+msg: 'cycle 905 (frame 9120): 5 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 9130: FULL PIPELINE (arrival -> centroids) took 0.1016 s'
+name: sensor_stream_reader
+msg: 'frame 9130: 5 components | same-tree #6 (d=0.00m), #5 (d=0.00m), #21 (d=0.00m), #7 (d=0.00m), #9 (d=0.02m) | trees=16 (map=19661...'
+name: rviz_trees
+msg: 'cycle 906 (frame 9130): 5 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 9140: FULL PIPELINE (arrival -> centroids) took 0.1378 s'
+name: sensor_stream_reader
+msg: 'frame 9140: 5 components | same-tree #5 (d=0.00m), #9 (d=0.00m), #7 (d=0.00m), #21 (d=0.02m), #6 (d=0.03m) | trees=16 (map=19638...'
+name: controller_server
+msg: Passing new path to controller.
+name: rviz_trees
+msg: 'cycle 907 (frame 9140): 5 accepted, 16 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 9150: FULL PIPELINE (arrival -> centroids) took 0.1067 s'
+name: sensor_stream_reader
+msg: 'frame 9150: 5 components | same-tree #6 (d=0.00m), #5 (d=0.00m), #7 (d=0.00m), #9 (d=0.00m), #21 (d=0.00m) | trees=16 (map=19576...'
+name: rviz_trees
+msg: 'cycle 908 (frame 9150): 5 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 9160: FULL PIPELINE (arrival -> centroids) took 0.1414 s'
+name: sensor_stream_reader
+msg: 'frame 9160: 5 components | same-tree #6 (d=0.00m), #5 (d=0.00m), #7 (d=0.00m), #21 (d=0.00m), #9 (d=0.01m) | trees=16 (map=19567...'
+name: controller_server
+msg: Passing new path to controller.
+name: rviz_trees
+msg: 'cycle 909 (frame 9160): 5 accepted, 16 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 9170: FULL PIPELINE (arrival -> centroids) took 0.0994 s'
+name: sensor_stream_reader
+msg: 'frame 9170: 5 components | same-tree #6 (d=0.00m), #5 (d=0.00m), #7 (d=0.00m), #9 (d=0.00m), #21 (d=0.02m) | trees=16 (map=19570...'
+name: rviz_trees
+msg: 'cycle 910 (frame 9170): 5 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 9180: FULL PIPELINE (arrival -> centroids) took 0.1083 s'
+name: sensor_stream_reader
+msg: 'frame 9180: 5 components | same-tree #6 (d=0.00m), #5 (d=0.00m), #7 (d=0.00m), #9 (d=0.00m), #21 (d=0.00m) | trees=16 (map=19622...'
+name: rviz_trees
+msg: 'cycle 911 (frame 9180): 5 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 9190: FULL PIPELINE (arrival -> centroids) took 0.1466 s'
+name: sensor_stream_reader
+msg: 'frame 9190: 6 components | same-tree #6 (d=0.00m), #5 (d=0.00m), #7 (d=0.00m), #9 (d=0.00m), #21 (d=0.00m), #4 (d=0.04m) | trees...'
+name: rviz_trees
+msg: 'cycle 912 (frame 9190): 6 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 9200: FULL PIPELINE (arrival -> centroids) took 0.1052 s'
+name: sensor_stream_reader
+msg: 'frame 9200: 6 components | same-tree #4 (d=0.00m), #6 (d=0.00m), #5 (d=0.00m), #9 (d=0.00m), #7 (d=0.00m), #21 (d=0.02m) | trees...'
+name: rviz_trees
+msg: 'cycle 913 (frame 9200): 6 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 9210: FULL PIPELINE (arrival -> centroids) took 0.1370 s'
+name: sensor_stream_reader
+msg: 'frame 9210: 6 components | same-tree #6 (d=0.00m), #5 (d=0.00m), #21 (d=0.00m), #7 (d=0.01m), #9 (d=0.01m), #4 (d=0.02m) | trees...'
+name: rviz_trees
+msg: 'cycle 914 (frame 9210): 6 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: controller_server
+msg: Failed to make progress
+name: controller_server
+msg: '[follow_path] [ActionServer] Aborting handle.'
+name: local_costmap.local_costmap
+msg: Received request to clear entirely the local_costmap
+name: global_costmap.global_costmap
+msg: Received request to clear entirely the global_costmap
+name: controller_server
+msg: Received a goal, begin computing control effort.
+name: sensor_stream_reader
+msg: 'frame 9220: FULL PIPELINE (arrival -> centroids) took 0.1289 s'
+name: sensor_stream_reader
+msg: 'frame 9220: 6 components | same-tree #4 (d=0.00m), #6 (d=0.00m), #5 (d=0.00m), #7 (d=0.00m), #21 (d=0.00m), #9 (d=0.01m) | trees...'
+name: rviz_trees
+msg: 'cycle 915 (frame 9220): 6 accepted, 16 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 9230: FULL PIPELINE (arrival -> centroids) took 0.1113 s'
+name: sensor_stream_reader
+msg: 'frame 9230: 6 components | same-tree #4 (d=0.00m), #6 (d=0.00m), #5 (d=0.00m), #7 (d=0.00m), #21 (d=0.00m), #9 (d=0.01m) | trees...'
+name: rviz_trees
+msg: 'cycle 916 (frame 9230): 6 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 9240: FULL PIPELINE (arrival -> centroids) took 0.1385 s'
+name: sensor_stream_reader
+msg: 'frame 9240: 7 components | same-tree #4 (d=0.00m), #6 (d=0.00m), #5 (d=0.00m), #9 (d=0.00m), #21 (d=0.00m), #7 (d=0.02m), #3 (d=...'
+name: controller_server
+msg: Passing new path to controller.
+name: rviz_trees
+msg: 'cycle 917 (frame 9240): 7 accepted, 16 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 9250: FULL PIPELINE (arrival -> centroids) took 0.1041 s'
+name: sensor_stream_reader
+msg: 'frame 9250: 7 components | same-tree #4 (d=0.00m), #6 (d=0.00m), #5 (d=0.00m), #7 (d=0.00m), #9 (d=0.00m), #21 (d=0.00m), #3 (d=...'
+name: rviz_trees
+msg: 'cycle 918 (frame 9250): 7 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'frame 9260: FULL PIPELINE (arrival -> centroids) took 0.1766 s'
+name: sensor_stream_reader
+msg: 'frame 9260: 7 components | same-tree #4 (d=0.00m), #6 (d=0.00m), #21 (d=0.00m), #7 (d=0.02m), #5 (d=0.02m), #3 (d=0.02m), #9 (d=...'
+name: controller_server
+msg: Passing new path to controller.
+name: rviz_trees
+msg: 'cycle 919 (frame 9260): 7 accepted, 16 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 9270: FULL PIPELINE (arrival -> centroids) took 0.1094 s'
+name: sensor_stream_reader
+msg: 'frame 9270: 7 components | same-tree #4 (d=0.00m), #5 (d=0.00m), #7 (d=0.00m), #9 (d=0.00m), #21 (d=0.00m), #6 (d=0.02m), #3 (d=...'
+name: rviz_trees
+msg: 'cycle 920 (frame 9270): 7 accepted, 16 in registry, map 308 cells'
+name: controller_server
+msg: Passing new path to controller.
+name: controller_server
+msg: Passing new path to controller.
+name: controller_server
+msg: Passing new path to controller.
+name: controller_server
+msg: Passing new path to controller.
+name: controller_server
+msg: Passing new path to controller.
+name: controller_server
+msg: Passing new path to controller.
+name: sensor_stream_reader
+msg: 'DTM rebuild #47: 4.63 s over 19612 columns'
+name: sensor_stream_reader
+msg: 'frame 9280: FULL PIPELINE (arrival -> centroids) took 4.7579 s'
+name: sensor_stream_reader
+msg: 'frame 9280: 7 components | same-tree #4 (d=0.00m), #6 (d=0.00m), #5 (d=0.00m), #21 (d=0.00m), #9 (d=0.01m), #3 (d=0.04m), #7 (d=...'
+name: rviz_trees
+msg: 'cycle 921 (frame 9280): 7 accepted, 16 in registry, map 308 cells'
+name: sensor_stream_reader
+msg: 'frame 9290: FULL PIPELINE (arrival -> centroids) took 0.1694 s'
+name: sensor_stream_reader
+msg: 'frame 9290: 4 components | same-tree #4 (d=0.00m), #7 (d=0.01m), #5 (d=0.02m), #9 (d=0.04m) | trees=16 (map=19577 cols)'
+name: rviz_trees
+msg: 'cycle 922 (frame 9290): 4 accepted, 16 in registry, map 308 cells'

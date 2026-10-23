@@ -1,0 +1,690 @@
+=== NODES
+WARNING: Be aware that there are nodes in the graph that share an exact name, which can have unintended side effects.
+/behavior_server
+/bt_navigator
+/bt_navigator_navigate_through_poses_rclcpp_node
+/bt_navigator_navigate_to_pose_rclcpp_node
+/controller_server
+/glim_ros
+/global_costmap/global_costmap
+/lifecycle_manager_navigation
+/local_costmap/local_costmap
+/nav2_rviz_docking_panel_node
+/nav2_rviz_docking_panel_node
+/nav2_rviz_selector_node
+/nav2_rviz_selector_node
+/octomap_server
+/planner_server
+/robot1/cmd_vel_pub
+/robot1/controller_manager
+/robot1/ground_filter
+/robot1/gz_ros_control
+/robot1/joint_group_controller
+/robot1/joint_state_broadcaster
+/robot1/odom
+/robot1/quadruped_controller
+/robot1/robot_state_publisher
+/robot1/ros_gz_bridge_pointcloud
+/ros_gz_bridge
+/rviz
+/rviz
+/rviz_navigation_dialog_action_client
+/rviz_navigation_dialog_action_client
+/rviz_trees
+/sensor_stream_reader
+/smoother_server
+/tf_republisher
+/transform_listener_impl_56b0bd4b5df0
+/transform_listener_impl_58274af75bb0
+/transform_listener_impl_58274b72b7e0
+/transform_listener_impl_590c2811bea0
+/transform_listener_impl_599c7f4fb210
+/transform_listener_impl_5cb512eb2230
+/transform_listener_impl_5f4e435a4110
+/transform_listener_impl_5f4e43e49c00
+/trunks/octomap_trunks
+/trunks/transform_listener_impl_5fbeefca4840
+=== TOPIC INFO
+--- /projected_map
+Publisher count: 1
+Node name: octomap_server
+Node namespace: /
+Topic type: nav_msgs/msg/OccupancyGrid
+Topic type hash: RIHS01_8d348150c12913a31ee0ec170fbf25089e4745d17035792a1ba94d6f0bc0cfc7
+Endpoint type: PUBLISHER
+Subscription count: 2
+Node name: rviz
+Node namespace: /
+Topic type: nav_msgs/msg/OccupancyGrid
+Topic type hash: RIHS01_8d348150c12913a31ee0ec170fbf25089e4745d17035792a1ba94d6f0bc0cfc7
+Endpoint type: SUBSCRIPTION
+Node name: rviz
+Node namespace: /
+Topic type: nav_msgs/msg/OccupancyGrid
+Topic type hash: RIHS01_8d348150c12913a31ee0ec170fbf25089e4745d17035792a1ba94d6f0bc0cfc7
+Endpoint type: SUBSCRIPTION
+--- /trunks/projected_map
+Publisher count: 1
+Node name: octomap_trunks
+Node namespace: /trunks
+Topic type: nav_msgs/msg/OccupancyGrid
+Topic type hash: RIHS01_8d348150c12913a31ee0ec170fbf25089e4745d17035792a1ba94d6f0bc0cfc7
+Endpoint type: PUBLISHER
+Subscription count: 0
+--- /map
+Publisher count: 0
+Subscription count: 2
+Node name: rviz
+Node namespace: /
+Topic type: nav_msgs/msg/OccupancyGrid
+Topic type hash: RIHS01_8d348150c12913a31ee0ec170fbf25089e4745d17035792a1ba94d6f0bc0cfc7
+Endpoint type: SUBSCRIPTION
+Node name: rviz
+Node namespace: /
+Topic type: nav_msgs/msg/OccupancyGrid
+Topic type hash: RIHS01_8d348150c12913a31ee0ec170fbf25089e4745d17035792a1ba94d6f0bc0cfc7
+Endpoint type: SUBSCRIPTION
+--- /livox/points_filtered
+Publisher count: 1
+Node name: ground_filter
+Node namespace: /robot1
+Topic type: sensor_msgs/msg/PointCloud2
+Topic type hash: RIHS01_9198cabf7da3796ae6fe19c4cb3bdd3525492988c70522628af5daa124bae2b5
+Endpoint type: PUBLISHER
+Subscription count: 1
+Node name: local_costmap
+Node namespace: /local_costmap
+Topic type: sensor_msgs/msg/PointCloud2
+Topic type hash: RIHS01_9198cabf7da3796ae6fe19c4cb3bdd3525492988c70522628af5daa124bae2b5
+Endpoint type: SUBSCRIPTION
+--- /robot1/scan
+Publisher count: 0
+Subscription count: 1
+Node name: global_costmap
+Node namespace: /global_costmap
+Topic type: sensor_msgs/msg/LaserScan
+Topic type hash: RIHS01_64c191398013af96509d518dac71d5164f9382553fce5c1f8cca5be7924bd828
+Endpoint type: SUBSCRIPTION
+--- /scan
+Publisher count: 0
+Subscription count: 2
+Node name: rviz
+Node namespace: /
+Topic type: sensor_msgs/msg/LaserScan
+Topic type hash: RIHS01_64c191398013af96509d518dac71d5164f9382553fce5c1f8cca5be7924bd828
+Endpoint type: SUBSCRIPTION
+Node name: rviz
+Node namespace: /
+Topic type: sensor_msgs/msg/LaserScan
+Topic type hash: RIHS01_64c191398013af96509d518dac71d5164f9382553fce5c1f8cca5be7924bd828
+Endpoint type: SUBSCRIPTION
+--- /robot1/points/points_timed
+Publisher count: 1
+Node name: ros_gz_bridge_pointcloud
+Node namespace: /robot1
+Topic type: sensor_msgs/msg/PointCloud2
+Topic type hash: RIHS01_9198cabf7da3796ae6fe19c4cb3bdd3525492988c70522628af5daa124bae2b5
+Endpoint type: PUBLISHER
+Subscription count: 3
+Node name: glim_ros
+Node namespace: /
+Topic type: sensor_msgs/msg/PointCloud2
+Topic type hash: RIHS01_9198cabf7da3796ae6fe19c4cb3bdd3525492988c70522628af5daa124bae2b5
+Endpoint type: SUBSCRIPTION
+Node name: sensor_stream_reader
+Node namespace: /
+Topic type: sensor_msgs/msg/PointCloud2
+Topic type hash: RIHS01_9198cabf7da3796ae6fe19c4cb3bdd3525492988c70522628af5daa124bae2b5
+Endpoint type: SUBSCRIPTION
+Node name: ground_filter
+Node namespace: /robot1
+Topic type: sensor_msgs/msg/PointCloud2
+Topic type hash: RIHS01_9198cabf7da3796ae6fe19c4cb3bdd3525492988c70522628af5daa124bae2b5
+Endpoint type: SUBSCRIPTION
+--- /glim_ros/points
+Publisher count: 1
+Node name: glim_ros
+Node namespace: /
+Topic type: sensor_msgs/msg/PointCloud2
+Topic type hash: RIHS01_9198cabf7da3796ae6fe19c4cb3bdd3525492988c70522628af5daa124bae2b5
+Endpoint type: PUBLISHER
+Subscription count: 2
+Node name: octomap_trunks
+Node namespace: /trunks
+Topic type: sensor_msgs/msg/PointCloud2
+Topic type hash: RIHS01_9198cabf7da3796ae6fe19c4cb3bdd3525492988c70522628af5daa124bae2b5
+Endpoint type: SUBSCRIPTION
+Node name: octomap_server
+Node namespace: /
+Topic type: sensor_msgs/msg/PointCloud2
+Topic type hash: RIHS01_9198cabf7da3796ae6fe19c4cb3bdd3525492988c70522628af5daa124bae2b5
+Endpoint type: SUBSCRIPTION
+--- /tf
+Publisher count: 2
+Node name: glim_ros
+Node namespace: /
+Topic type: tf2_msgs/msg/TFMessage
+Topic type hash: RIHS01_e369d0f05a23ae52508854b66f6aa0437f3449d652e8cbf22d5abe85d020f087
+Endpoint type: PUBLISHER
+Node name: tf_republisher
+Node namespace: /
+Topic type: tf2_msgs/msg/TFMessage
+Topic type hash: RIHS01_e369d0f05a23ae52508854b66f6aa0437f3449d652e8cbf22d5abe85d020f087
+Endpoint type: PUBLISHER
+Subscription count: 13
+Node name: transform_listener_impl_5fbeefca4840
+Node namespace: /trunks
+Topic type: tf2_msgs/msg/TFMessage
+Topic type hash: RIHS01_e369d0f05a23ae52508854b66f6aa0437f3449d652e8cbf22d5abe85d020f087
+Endpoint type: SUBSCRIPTION
+Node name: transform_listener_impl_5cb512eb2230
+Node namespace: /
+Topic type: tf2_msgs/msg/TFMessage
+Topic type hash: RIHS01_e369d0f05a23ae52508854b66f6aa0437f3449d652e8cbf22d5abe85d020f087
+Endpoint type: SUBSCRIPTION
+Node name: sensor_stream_reader
+Node namespace: /
+Topic type: tf2_msgs/msg/TFMessage
+Topic type hash: RIHS01_e369d0f05a23ae52508854b66f6aa0437f3449d652e8cbf22d5abe85d020f087
+Endpoint type: SUBSCRIPTION
+Node name: transform_listener_impl_5f4e435a4110
+Node namespace: /
+Topic type: tf2_msgs/msg/TFMessage
+Topic type hash: RIHS01_e369d0f05a23ae52508854b66f6aa0437f3449d652e8cbf22d5abe85d020f087
+Endpoint type: SUBSCRIPTION
+Node name: transform_listener_impl_5f4e43e49c00
+Node namespace: /
+Topic type: tf2_msgs/msg/TFMessage
+Topic type hash: RIHS01_e369d0f05a23ae52508854b66f6aa0437f3449d652e8cbf22d5abe85d020f087
+Endpoint type: SUBSCRIPTION
+Node name: transform_listener_impl_590c2811bea0
+Node namespace: /
+Topic type: tf2_msgs/msg/TFMessage
+Topic type hash: RIHS01_e369d0f05a23ae52508854b66f6aa0437f3449d652e8cbf22d5abe85d020f087
+Endpoint type: SUBSCRIPTION
+Node name: transform_listener_impl_56b0bd4b5df0
+Node namespace: /
+Topic type: tf2_msgs/msg/TFMessage
+Topic type hash: RIHS01_e369d0f05a23ae52508854b66f6aa0437f3449d652e8cbf22d5abe85d020f087
+Endpoint type: SUBSCRIPTION
+Node name: transform_listener_impl_599c7f4fb210
+Node namespace: /
+Topic type: tf2_msgs/msg/TFMessage
+Topic type hash: RIHS01_e369d0f05a23ae52508854b66f6aa0437f3449d652e8cbf22d5abe85d020f087
+Endpoint type: SUBSCRIPTION
+Node name: behavior_server
+Node namespace: /
+Topic type: tf2_msgs/msg/TFMessage
+Topic type hash: RIHS01_e369d0f05a23ae52508854b66f6aa0437f3449d652e8cbf22d5abe85d020f087
+Endpoint type: SUBSCRIPTION
+Node name: smoother_server
+Node namespace: /
+Topic type: tf2_msgs/msg/TFMessage
+Topic type hash: RIHS01_e369d0f05a23ae52508854b66f6aa0437f3449d652e8cbf22d5abe85d020f087
+Endpoint type: SUBSCRIPTION
+Node name: bt_navigator
+Node namespace: /
+Topic type: tf2_msgs/msg/TFMessage
+Topic type hash: RIHS01_e369d0f05a23ae52508854b66f6aa0437f3449d652e8cbf22d5abe85d020f087
+Endpoint type: SUBSCRIPTION
+Node name: transform_listener_impl_58274af75bb0
+Node namespace: /
+Topic type: tf2_msgs/msg/TFMessage
+Topic type hash: RIHS01_e369d0f05a23ae52508854b66f6aa0437f3449d652e8cbf22d5abe85d020f087
+Endpoint type: SUBSCRIPTION
+Node name: transform_listener_impl_58274b72b7e0
+Node namespace: /
+Topic type: tf2_msgs/msg/TFMessage
+Topic type hash: RIHS01_e369d0f05a23ae52508854b66f6aa0437f3449d652e8cbf22d5abe85d020f087
+Endpoint type: SUBSCRIPTION
+=== FRAMES AND HEIGHT
+imu_link
+---
+x: -0.0009431106590735725
+y: 2.1561881751177192e-05
+z: -6.733645718235166e-05
+---
+=== TF CHAIN
+[INFO] [1792671710.857405221] [tf2_echo]: Waiting for transform map ->  odom: Invalid frame ID "map" passed to canTransform argument target_frame - frame does not exist
+[INFO] [1792671712.822112627] [tf2_echo]: Waiting for transform map ->  odom: Invalid frame ID "map" passed to canTransform argument target_frame - frame does not exist
+At time 422.77000999
+- Translation: [0.000, 0.000, 0.000]
+- Rotation: in Quaternion (xyzw) [0.000, 0.000, 0.000, 1.000]
+- Rotation: in RPY (radian) [0.000, -0.000, 0.000]
+- Rotation: in RPY (degree) [0.000, -0.000, 0.000]
+- Matrix:
+[INFO] [1792671714.973017581] [tf2_echo]: Waiting for transform odom ->  base_link: Invalid frame ID "odom" passed to canTransform argument target_frame - frame does not exist
+At time 424.277000999
+- Translation: [-0.001, 0.001, -0.000]
+- Rotation: in Quaternion (xyzw) [0.000, 0.000, 0.000, 1.000]
+- Rotation: in RPY (radian) [0.000, 0.000, 0.000]
+- Rotation: in RPY (degree) [0.024, 0.017, 0.013]
+- Matrix:
+  1.000 -0.000  0.000 -0.001
+=== PARAMS
+WARNING: Be aware that there are nodes in the graph that share an exact name, which can have unintended side effects.
+--- /controller_server
+/controller_server:
+  ros__parameters:
+    /bond_disable_heartbeat_timeout: true
+    FollowPath:
+      BaseObstacle:
+        class: BaseObstacle
+        scale: 4.0
+        sum_scores: false
+      GoalAlign:
+        aggregation_type: last
+        class: GoalAlign
+        forward_point_distance: 0.1
+        scale: 24.0
+      GoalDist:
+        aggregation_type: last
+        class: GoalDist
+        scale: 24.0
+      Oscillation:
+        class: Oscillation
+        oscillation_reset_angle: 0.2
+        oscillation_reset_dist: 0.05
+        oscillation_reset_time: -1.0
+        scale: 1.0
+        x_only_threshold: 0.05
+      PathAlign:
+        aggregation_type: last
+        class: PathAlign
+        forward_point_distance: 0.1
+        scale: 32.0
+      PathDist:
+        aggregation_type: last
+        class: PathDist
+        scale: 32.0
+      RotateToGoal:
+        class: RotateToGoal
+        lookahead_time: -1.0
+        scale: 32.0
+        slowing_factor: 5.0
+      acc_lim_theta: 3.2
+      acc_lim_x: 3.0
+      acc_lim_y: 0.0
+      angular_granularity: 0.025
+      critics:
+      - RotateToGoal
+      - Oscillation
+      - BaseObstacle
+      - GoalAlign
+      - PathAlign
+      - PathDist
+      - GoalDist
+      debug_trajectory_details: true
+      decel_lim_theta: -3.2
+      decel_lim_x: -3.0
+      decel_lim_y: 0.0
+      default_critic_namespaces: []
+      discretize_by_time: false
+      forward_prune_distance: 2.0
+      include_last_point: true
+      limit_vel_cmd_in_traj: false
+      linear_granularity: 0.05
+      marker_lifetime: 0.1
+      max_speed_xy: 0.4
+      max_vel_theta: 0.5
+      max_vel_x: 0.4
+      max_vel_y: 0.0
+      min_speed_theta: 0.0
+      min_speed_xy: 0.0
+      min_vel_x: 0.0
+      min_vel_y: 0.0
+      plugin: dwb_core::DWBLocalPlanner
+      prune_distance: 2.0
+      prune_plan: true
+      publish_cost_grid_pc: false
+      publish_evaluation: true
+      publish_global_plan: true
+      publish_local_plan: true
+      publish_trajectories: true
+      publish_transformed_plan: true
+      short_circuit_trajectory_evaluation: true
+      shorten_transformed_plan: true
+      sim_time: 1.7
+      time_granularity: 0.5
+      trajectory_generator_name: dwb_plugins::StandardTrajectoryGenerator
+      trans_stopped_velocity: 0.25
+      transform_tolerance: 0.2
+      vtheta_samples: 20
+      vx_samples: 20
+      vy_samples: 5
+      xy_goal_tolerance: 0.25
+    action_server_result_timeout: 10.0
+    autostart_node: false
+    bond_heartbeat_period: 0.1
+    controller_frequency: 20.0
+    controller_plugins:
+    - FollowPath
+    costmap_update_timeout: 0.3
+    enable_stamped_cmd_vel: false
+    failure_tolerance: 0.0
+    general_goal_checker:
+      plugin: nav2_controller::SimpleGoalChecker
+      stateful: true
+      symmetric_yaw_tolerance: false
+      xy_goal_tolerance: 0.25
+      yaw_goal_tolerance: 0.2
+    goal_checker_plugins:
+    - general_goal_checker
+    min_theta_velocity_threshold: 0.001
+    min_x_velocity_threshold: 0.001
+    min_y_velocity_threshold: 0.5
+    odom_topic: odom
+    progress_checker:
+      movement_time_allowance: 10.0
+      plugin: nav2_controller::SimpleProgressChecker
+      required_movement_radius: 0.5
+    progress_checker_plugins:
+    - progress_checker
+    publish_zero_velocity: true
+    qos_overrides:
+      /clock:
+        subscription:
+          depth: 1
+          durability: volatile
+          history: keep_last
+          reliability: best_effort
+    speed_limit_topic: speed_limit
+    start_type_description_service: true
+    use_realtime_priority: false
+    use_sim_time: true
+
+--- /global_costmap/global_costmap
+/global_costmap/global_costmap:
+  ros__parameters:
+    /bond_disable_heartbeat_timeout: true
+    always_send_full_costmap: true
+    autostart_node: false
+    bond_heartbeat_period: 0.1
+    filters: []
+    footprint: '[ [0.35, 0.175], [0.35, -0.175], [-0.35, -0.175], [-0.35, 0.175] ]'
+    footprint_padding: 0.009999999776482582
+    global_frame: map
+    height: 50
+    inflation_layer:
+      cost_scaling_factor: 4.0
+      enabled: true
+      inflate_around_unknown: false
+      inflate_unknown: false
+      inflation_radius: 0.45
+      plugin: nav2_costmap_2d::InflationLayer
+    initial_transform_timeout: 60.0
+    lethal_cost_threshold: 100
+    map_topic: /map
+    map_vis_z: 0.0
+    observation_sources: ''
+    obstacle_layer:
+      combination_method: 1
+      enabled: true
+      footprint_clearing_enabled: true
+      max_obstacle_height: 2.0
+      min_obstacle_height: 0.0
+      observation_sources: scan
+      plugin: nav2_costmap_2d::ObstacleLayer
+      scan:
+        clearing: true
+        data_type: LaserScan
+        expected_update_rate: 0.0
+        inf_is_valid: false
+        marking: true
+        max_obstacle_height: 2.0
+        min_obstacle_height: 0.0
+        observation_persistence: 0.0
+        obstacle_max_range: 2.5
+        obstacle_min_range: 0.0
+        raytrace_max_range: 3.0
+        raytrace_min_range: 0.0
+        sensor_frame: ''
+        topic: /robot1/scan
+    origin_x: 0.0
+    origin_y: 0.0
+    plugins:
+    - obstacle_layer
+    - inflation_layer
+    publish_frequency: 1.0
+    qos_overrides:
+      /clock:
+        subscription:
+          depth: 1
+          durability: volatile
+          history: keep_last
+          reliability: best_effort
+    resolution: 0.05
+    robot_base_frame: base_link
+    robot_radius: 0.1
+    rolling_window: true
+    start_type_description_service: true
+    track_unknown_space: true
+    transform_tolerance: 0.3
+    trinary_costmap: true
+    unknown_cost_value: 255
+    update_frequency: 1.0
+    use_maximum: false
+    use_sim_time: true
+    width: 50
+
+--- /local_costmap/local_costmap
+/local_costmap/local_costmap:
+  ros__parameters:
+    /bond_disable_heartbeat_timeout: true
+    always_send_full_costmap: false
+    autostart_node: false
+    bond_heartbeat_period: 0.1
+    filters: []
+    footprint: '[ [0.35, 0.18], [0.35, -0.18], [-0.38, -0.18], [-0.38, 0.18] ]'
+    footprint_padding: 0.009999999776482582
+    global_frame: odom
+    height: 10
+    inflation_layer:
+      cost_scaling_factor: 4.0
+      enabled: true
+      inflate_around_unknown: false
+      inflate_unknown: false
+      inflation_radius: 0.45
+      plugin: nav2_costmap_2d::InflationLayer
+    initial_transform_timeout: 60.0
+    lethal_cost_threshold: 100
+    map_topic: /map
+    map_vis_z: 0.0
+    observation_sources: ''
+    origin_x: 0.0
+    origin_y: 0.0
+    plugins:
+    - voxel_layer
+    - inflation_layer
+    publish_frequency: 2.0
+    qos_overrides:
+      /clock:
+        subscription:
+          depth: 1
+          durability: volatile
+          history: keep_last
+          reliability: best_effort
+    resolution: 0.05
+    robot_base_frame: base_link
+    robot_radius: 0.1
+    rolling_window: true
+    start_type_description_service: true
+    track_unknown_space: false
+    transform_tolerance: 0.3
+    trinary_costmap: true
+    unknown_cost_value: 255
+    update_frequency: 5.0
+    use_maximum: false
+    use_sim_time: true
+    voxel_layer:
+      combination_method: 1
+      enabled: true
+      footprint_clearing_enabled: true
+      livox:
+        clearing: true
+        data_type: PointCloud2
+        expected_update_rate: 0.0
+        inf_is_valid: false
+        marking: true
+        max_obstacle_height: 2.0
+        min_obstacle_height: 0.15
+        observation_persistence: 0.0
+        obstacle_max_range: 2.5
+        obstacle_min_range: 0.0
+        raytrace_max_range: 3.0
+        raytrace_min_range: 0.0
+        sensor_frame: ''
+        topic: /livox/points_filtered
+      mark_threshold: 0
+      max_obstacle_height: 2.0
+      min_obstacle_height: 0.0
+      observation_sources: livox
+      origin_z: -1.3
+      plugin: nav2_costmap_2d::VoxelLayer
+      publish_voxel_map: true
+      unknown_threshold: 15
+      z_resolution: 0.1
+      z_voxels: 16
+    width: 10
+
+--- /octomap_server
+/octomap_server:
+  ros__parameters:
+    base_frame_id: base_link
+    color:
+      a: 1.0
+      b: 1.0
+      g: 0.0
+      r: 0.0
+    color_factor: 0.8
+    color_free:
+      a: 1.0
+      b: 0.0
+      g: 1.0
+      r: 0.0
+    colored_map: false
+    compress_map: true
+    filter_ground_plane: false
+    filter_speckles: false
+    frame_id: map
+    ground_filter:
+      angle: 0.15
+      distance: 0.04
+      plane_distance: 0.07
+    incremental_2D_projection: false
+    latch: false
+    max_depth: 16
+    min_x_size: 0.0
+    min_y_size: 0.0
+    occupancy_max_z: 100.0
+    occupancy_min_z: -100.0
+    octomap_path: ''
+    point_cloud_max_x: 1.7976931348623157e+308
+    point_cloud_max_y: 1.7976931348623157e+308
+    point_cloud_max_z: 0.0
+    point_cloud_min_x: -1.7976931348623157e+308
+    point_cloud_min_y: -1.7976931348623157e+308
+    point_cloud_min_z: -0.05
+    publish_free_space: false
+    qos_overrides:
+      /parameter_events:
+        publisher:
+          depth: 1000
+          durability: volatile
+          history: keep_last
+          reliability: reliable
+    resolution: 0.2
+    sensor_model:
+      hit: 0.7
+      max: 0.97
+      max_range: 15.0
+      min: 0.12
+      miss: 0.4
+    start_type_description_service: true
+    use_height_map: false
+    use_sim_time: false
+
+--- /planner_server
+/planner_server:
+  ros__parameters:
+    /bond_disable_heartbeat_timeout: true
+    GridBased:
+      allow_unknown: true
+      plugin: nav2_navfn_planner::NavfnPlanner
+      tolerance: 1.0
+      use_astar: true
+      use_final_approach_orientation: false
+    action_server_result_timeout: 10.0
+    autostart_node: false
+    bond_heartbeat_period: 0.1
+    costmap_update_timeout: 1.0
+    expected_planner_frequency: 1.0
+    planner_plugins:
+    - GridBased
+    qos_overrides:
+      /clock:
+        subscription:
+          depth: 1
+          durability: volatile
+          history: keep_last
+          reliability: best_effort
+    start_type_description_service: true
+    use_sim_time: true
+
+--- /trunks/octomap_trunks
+/trunks/octomap_trunks:
+  ros__parameters:
+    base_frame_id: base_link
+    color:
+      a: 1.0
+      b: 1.0
+      g: 0.0
+      r: 0.0
+    color_factor: 0.8
+    color_free:
+      a: 1.0
+      b: 0.0
+      g: 1.0
+      r: 0.0
+    colored_map: false
+    compress_map: true
+    filter_ground_plane: false
+    filter_speckles: false
+    frame_id: map
+    ground_filter:
+      angle: 0.15
+      distance: 0.04
+      plane_distance: 0.07
+    incremental_2D_projection: false
+    latch: false
+    max_depth: 16
+    min_x_size: 0.0
+    min_y_size: 0.0
+    occupancy_max_z: 100.0
+    occupancy_min_z: -100.0
+    octomap_path: ''
+    point_cloud_max_x: 1.7976931348623157e+308
+    point_cloud_max_y: 1.7976931348623157e+308
+    point_cloud_max_z: 100.0
+    point_cloud_min_x: -1.7976931348623157e+308
+    point_cloud_min_y: -1.7976931348623157e+308
+    point_cloud_min_z: -100.0
+    publish_free_space: false
+    qos_overrides:
+      /parameter_events:
+        publisher:
+          depth: 1000
+          durability: volatile
+          history: keep_last
+          reliability: reliable
+    resolution: 0.1
+    sensor_model:
+      hit: 0.7
+      max: 0.97
+      max_range: 8.0
+      min: 0.12
+      miss: 0.4
+    start_type_description_service: true
+    use_height_map: false
+    use_sim_time: false
+

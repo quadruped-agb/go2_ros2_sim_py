@@ -82,16 +82,26 @@ RUN git clone --depth 1 --branch v0.2.0-harmonic https://github.com/RobotecAI/RG
 
 ENV RGL_PATTERNS_DIR=/rgl_patterns
 
-RUN pip3 install --break-system-packages ortools --ignore-installed typing_extensions
-
-RUN pip3 install --break-system-packages 'numpy<2' --ignore-installed
+RUN --mount=type=cache,target=/root/.cache/pip \
+    echo "numpy==1.26.4" > /tmp/constraints.txt && \
+    pip3 install --break-system-packages \
+      --ignore-installed \
+      --default-timeout=300 --retries 10 \
+      -c /tmp/constraints.txt \
+      scipy==1.16.3 scikit-learn==1.7.2 dendromatics ortools typing_extensions && \
+    python3 -c "import numpy, scipy, ortools, dendromatics; \
+assert numpy.__version__.startswith('1.'), numpy.__version__; \
+print('numpy', numpy.__version__, 'scipy', scipy.__version__, 'ortools', ortools.__version__)" && \
+    rm /tmp/constraints.txt
+    
+    
 RUN apt-get update && apt-get install -y \
     ros-jazzy-octomap-server \
     ros-jazzy-octomap-msgs \
     ros-jazzy-octomap-ros \
     && rm -rf /var/lib/apt/lists/*
 
-
+    
 # Копируем исходный код
 COPY ../ /root/ws/src
 
