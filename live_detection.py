@@ -20,12 +20,7 @@ from std_msgs.msg import Float64MultiArray, MultiArrayDimension
 from rclpy.qos import QoSProfile, DurabilityPolicy, qos_profile_sensor_data
 
 
-# Debug dumps are written next to this file, not into the current working
-# directory, so they land in the same place no matter where you launch from.
 DEBUG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "debug_ccl")
-# Everything else (final maps, registry, periodic occmap/DTM snapshots, pose
-# wait log) goes here, for the same reason. In the Gazebo container the cwd is
-# /root/ws, which is not mounted, so cwd-relative files never reached the host.
 OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "detection_output")
 os.makedirs(OUT_DIR, exist_ok=True)
 
@@ -62,151 +57,30 @@ def slerp(q0, q1, a):
     return s0 * q0 + s1 * q1
 
 class Cfg:
-    # detection (slab/voxel numbers match voxelization.py)
-    voxel = 0.10             # m, XY raster + voxel dedup resolution
-    # Algorithm 1 line 1 slabs on ABSOLUTE v_z -- "V2D <- {(v_x, v_y) | v in
-    # V_occ, v_z in [z_min, z_max]}". ORACLE does no height normalisation
-    # anywhere; Sec 4.1 just positions the slab "between the trunk base and the
-    # lower canopy according to the target environment's morphology, with the
-    # lower bound optionally raised to avoid low-lying ground clutter".
-    #
-    # These are metres in GLIM's map frame, and they are environment-specific.
-    # For forest_56 the terrain is nearly flat (DTM relief 0.62 m p5-p95, median
-    # ground z = -0.48), so a fixed band behaves like the DTM-normalised one:
-    #     DTM-normalised   0.40..1.37 above ground -> 18 components >=3 cells
-    #     absolute z       0.02..1.12              -> 18 components >=3 cells
-    # The lower bound is the sensitive end. Anything from ground+0.40 upward
-    # gives 18-21 components; ground+0.30 (z = -0.18) gives 87, because the
-    # ground surface itself enters the slab. 0.02 keeps 0.2 m of margin.
-    z_min = 0.15 #0.4 did not work         # m, absolute, slab bottom (ground + 0.50)
-    z_max = 0.5             # m, absolute, slab top    (ground + 1.60)
-    # Algorithm 1, filter (i). Sec 4.1: at delta = 0.1 m "the smallest expected
-    # trunk (r ~ 0.1 m) projects to a handful of occupied xy-cells, so n_min is
-    # placed below this count to retain the thinnest detectable stems while
-    # rejecting single-voxel noise".
-    n_min = 5 #100->30 trees
-    # Algorithm 1 runs "at each planning iteration" (Sec 3.2), not once per
-    # scan. The map is updated every scan, but detection every scan costs
-    # ~91 ms against a 106 ms scan period, which would put the node behind the
-    # stream; the map barely changes between consecutive scans anyway.
+    voxel = 0.10            
+    z_min = 0.15 #0.4 did not work        
+    z_max = 0.5            
+    n_min = 20 #100->30 trees
     detect_every = 10
-
-             # run Algorithm 1 on every Nth accepted scan
-
-    # Radius of the map window that Algorithm 1 runs over each iteration,
-    # centred on the sensor. Bounds the per-iteration CCL cost and keeps
-    # detection inside the region where the ground grid is well populated.
-    det_radius = 5.0        # m, horizontal, from the sensor origin
-
-    # The sim only models the Mid-360's 0.1 m blind zone, so the robot's own
-    # body and legs are returned and land squarely in the slab band -- on the
-    # recorded bag a quarter of all slab points were inside 0.6 m, and they
-    # fitted into a persistent phantom "trunk" at the robot's own position.
-    self_radius = 0.0       # m, horizontal, drop returns closer than this
-   # Algorithm 1, filter (ii): ground continuity. The band lies BELOW the
-    # slab, between the ground and z_min. A component survives only if enough
-    # of its cells have occupied voxels down there -- i.e. it stands on the
-    # ground rather than hanging in the air. This is the stage that rejects
-    # canopy and suspended branches; the support fraction is not specified in
-    # the paper.
-    # Heights ABOVE GROUND (z0), not absolute. Measured per component on the
-    # static map, with the CSF ground below: a +/-0.10 band is a 0.20 m slice
-    # at the DTM surface -- thinner than DTM error plus 0.1 m voxel
-    # quantisation -- so the big-crown components score almost nothing and no
-    # threshold can separate them from canopy:
-    #     band            min support over the 17 trees   the one non-tree
-    #     -0.10..0.10               0.03                        0.00
-    #      0.05..0.35               0.22                        0.00
-    #     -0.20..0.40               0.33                        0.00
-    # The wide band is the only one that leaves a usable gap.
-    z_gnd_min = -0.4       # m above ground, band bottom (straddles the surface)
-    z_gnd_max = 0.2         # m above ground, band top (up to z_min)
-    # Calibrated on forest_56: clean trunk components score 0.81-0.94, but the
-    # two largest (580 and 422 cells, crowns spreading well beyond the stem)
-    # score 0.29 and 0.41, so 0.50 silently dropped two real trees. 0.25 keeps
-    # every one of the 17 while still rejecting canopy, which scores ~0.
-    ground_support_frac = 0.25 # share of a component's cells that must be
-                               # backed by ground-band voxels
-
-    # Algorithm 1, filter (iii): bounding-circle radius. Sec 4.1: r_min
-    # "excludes sub-voxel-resolution fragments", r_max "excludes multi-trunk
-    # clusters and large non-trunk structures while accommodating the largest
-    # expected trunk". r_k is a BOUNDING radius (furthest cell from the
-    # centroid + delta/2), not a least-squares fit, so it cannot run away.
-    # Calibrated on the static map of forest_56: running the paper's
-    # c_k/r_k over the 18 DTM-slab components gives bounding radii of
-    # 0.50 .. 2.24 m (median 1.18) for the 17 real trees. r_max = 0.60 would
-    # therefore have rejected 15 of the 17.
-    r_min = 0.05            # m
-    r_max = 2.7             # m -- also sets d_match below
-
-    # registry
-    # Sec 4.2: "greedy nearest-neighbour matching with matching threshold
-    # d_match = max(5 * delta_res, r_max)". A CONSTANT -- r_max is the radius
-    # filter's upper bound above, not a running maximum. The 17 static-map
-    # trees are 6.03 m apart at the closest (median 11.68 m), so a 0.60 m gate
-    # keeps an order of magnitude of margin.
-    # can i set this to rmax only? why  would that not work
+    det_radius = 10.0        
+    self_radius = 0.0      
+    z_gnd_min = -0.4      
+    z_gnd_max = 0.2        
+    ground_support_frac = 0.25 
+    r_min = 0.05            
+    r_max = 2.7             
     d_match = max(5 * voxel, r_max)
-
-    #what exactly is this doing? checking what?
-    reg_cell = 5.0           # m, spatial-hash cell so matching only looks at
-                             # nearby entries, not the whole registry
-#i dont need interpolation remove that since i am getting pose for every frame
-    pose_max_dt = 0.05       # s, refuse to use a pose further than this from
-                             # the scan stamp
-
-    # GLIM publishes the pose for scan N about one scan period AFTER the scan
-    # itself, so a scan has to wait for its pose. Hold at most this many.
-
-#this is the pending queue size? so wait for pose for each frame for at most 2 seconds
-    max_pending = 20         # scans (~2 s at 9.4 Hz)
-
-    # logging. The per-frame detections and the local->global merge decisions
-    # are the point of this script; the raw sensor stream is not.
-
-    #what is this doing again???
-    log_sensor_msgs = False  # per-message CAMERA / IMU / TF_STATIC lines
-
-    #what is this and is this really necessary why do u create unnecessary variables bruh
-    quiet_every = 50         # frames with no detections: one line every N
-   # Ground model. Per-cell min-Z is NOT a ground surface: under a trunk there
-    # is no ground return, so that column's minimum jumps up to the trunk's
-    # lowest voxel and neighbouring columns disagree by tens of centimetres.
-    # The slab then cuts one trunk at several heights and it shatters. Measured
-    # on the static map, same cloud and same slab, only the reference changing:
-    #     cloth DTM (voxelization.py)                 18 comps, r median 1.06
-    #     min-Z, cell 0.25                           201 comps, r median 0.20
-    #     min-Z + morphological opening               55 comps, r median 0.41
-    #     min-Z, 3 m cell + bilinear sampling         28 comps, r median 0.75
-    #     CSF over per-column min-Z candidates        18 comps, r median 1.08
-    # So keep collecting min-Z -- OccupancyMap already holds it per column --
-    # but feed it to the same cloth simulation voxelization.py uses instead of
-    # treating it as the ground. Terrain-general, and identical to the DTM.
-    # Cost: 1.74 s per rebuild over the full candidate set, 5.0 ms per query of
-    # 30k points. Do NOT subsample the candidates -- at 1/4 the build took
-    # 3.42 s and at 1/10 5.22 s, because complete_dtm has more voids to fill.
-
-    #this is the default csf res parameter right
-    cloth_resolution = 0.3   # m, CSF cloth resolution
-
-    #this i need to tune since i would need the dtm for every current frame that is under detection
-    #so that would mean that it is built every 10 frames? as detection happens every 10 frames or
-    #i could increase detect every so that detection frequency matches the time it takes for dtm
+    reg_cell = 5.0           
+    pose_max_dt = 0.05       
+    max_pending = 20        
+    log_sensor_msgs = False 
+    quiet_every = 50         
+    cloth_resolution = 0.3   
     dtm_rebuild_every = 20   # detection cycles between DTM rebuilds
-
-#these are useless now
-       # ground grid (superseded by GroundModel; kept for reference)
-    ground_cell = 0.25      # m, min-Z cell size
-    ground_min_hits = 5 #changed from 3      # a cell is only trusted once this many points land in it
-    ground_fill_rings = 2    # search this many ground cells outward when a cell is empty
-
-    merge_floor = 0 #what even is this
-
-    # Debug: dump the CCL raster + registry snapshot every Nth detection cycle,
-    # for ORACLE/visualize_ccl.py. 0 disables. Each dump is a few hundred KB.
-
-    #gives me the graph for every detection happening every 10 frames
+    ground_cell = 0.25     
+    ground_min_hits = 5 
+    ground_fill_rings = 2    
+    merge_floor = 0
     debug_ccl_every = 1
 
 class SensorStreamReader(Node):
@@ -217,8 +91,6 @@ class SensorStreamReader(Node):
         self.start_time = time.time()   #wall-clock start
         self.total_detect_time = 0.0    #cumulative time spent in detect_trunks
         self.n_detect_calls = 0         #how many times detect_trunks actually ran
-
-
         self.cfg = Cfg
         self.poses = PoseBuffer()
         self.occ_map = OccupancyMap(Cfg.voxel)
@@ -367,7 +239,7 @@ class SensorStreamReader(Node):
         #keep = ((pts_map[:, :2] - t[:2]) ** 2).sum(axis=1) >= self.cfg.self_radius ** 2
         #self.occ_map.update(pts_map[keep])
 
-        # 4. Algorithm 1 over the map window around the sensor
+        #Algorithm 1 over the map window around the sensor
         if frame_idx % self.cfg.detect_every:
             return
 
@@ -552,7 +424,7 @@ class SensorStreamReader(Node):
         if self.ground.dtm is not None:
             np.save(os.path.join(OUT_DIR, "final_dtm.npy"), self.ground.dtm)
 
-    # NEW: full occupancy map, all heights ,matches static script's pcd_arr
+    #full occupancy map, all heights ,matches static script's pcd_arr
         full_map = self.occ_map.all_voxels()
         np.save(os.path.join(OUT_DIR, "final_occmap_full.npy"), full_map)
         print(f"saved full occupancy map: {len(full_map)} voxels "
@@ -605,7 +477,7 @@ class PoseBuffer:
                 return None
             return quat_to_R(self.quat[j]), self.pos[j]
 
-        #interpolation
+        #interpolation -> this doesnt happen since i am getting pose for every frame
         #take previous and next stamp  
         t0, t1 = self.stamps[i - 1], self.stamps[i]
 
@@ -621,14 +493,9 @@ class PoseBuffer:
         #interpolating orientation
         quat = slerp(self.quat[i - 1], self.quat[i], a)
         return quat_to_R(quat), pos
-
-        #now we might not get pose for every lidar frame, so we interpolate with nearest poses within a threshold 
-        # called max_dt; if time difference is less than this then interpolation will make sense
-        #lidar scans at ~10Hz -> 0.1s -> 100ms so max_dt can be kept 50ms - half scan period
-
    
 
-class GroundGrid:
+class GroundGrid: #superseded by dtm dendromatics
 #to replace DTM, incremental expandable ground grid storing min Z per cell
 
     def __init__(self, cell, min_hits, fill_rings):
@@ -740,17 +607,6 @@ class GroundGrid:
 
 
 class OccupancyMap:
-    #Sparse 3-D occupancy at Cfg.voxel resolution.
-
-    # Columns, not voxels, are the unit of storage: {(i, j): {k, ...}}. Everything
-    # downstream -- slab membership, ground continuity, the XY projection -- is a
-    # per-column question, so this is the layout each of them wants.
-
-    # Columns are bucketed into coarse tiles so a window query touches only the
-    # tiles it overlaps instead of walking the whole map, which grows to hundreds
-    # of thousands of columns over a run.
-    # """
-
     TILE = 64                                  # columns per tile edge
 
     def __init__(self, voxel):
@@ -776,10 +632,6 @@ class OccupancyMap:
             col.add(int(k))
 
     def window(self, centre_xy, radius):
-        # """Columns whose XY centre lies within `radius` of centre_xy.
-
-        # Returns (keys, ks_list) with keys an (M, 2) int array of (i, j).
-        # """
         lo = np.floor((np.asarray(centre_xy) - radius) / self.voxel).astype(np.int64)
         hi = np.floor((np.asarray(centre_xy) + radius) / self.voxel).astype(np.int64)
         keys = []
@@ -797,13 +649,6 @@ class OccupancyMap:
         return arr, [self.cols[(int(a), int(b))] for a, b in arr]
 
     def ground_candidates(self):
-        """Lowest occupied voxel of every column, as an (N, 3) cloud.
-
-        This is exactly the min-Z a GroundGrid would collect, and the map
-        already holds it, so the ground model costs no extra bookkeeping. It is
-        a ground-CANDIDATE cloud, not the ground: the cloth simulation is what
-        turns it into a surface.
-        """
         out = np.empty((len(self.cols), 3), dtype=np.float64)
         for n, ((i, j), ks) in enumerate(self.cols.items()):
             out[n, 0] = (i + 0.5) * self.voxel
@@ -835,13 +680,6 @@ class OccupancyMap:
 # ground model: cloth-simulation DTM, rebuilt periodically from the map
 # --------------------------------------------------------------------------- #
 class GroundModel:
-    """The same CSF voxelization.py runs, driven incrementally.
-
-    Rebuilt every Cfg.dtm_rebuild_every detection cycles from the occupancy
-    map's per-column minima and cached in between, so the per-cycle cost is one
-    interpolation rather than one cloth simulation.
-    """
-
     def __init__(self, rebuild_every, cloth_resolution):
         self.rebuild_every = rebuild_every
         self.cloth_resolution = cloth_resolution
@@ -937,9 +775,6 @@ def detect_trunks(occ_map, ground, sensor_xy, cfg=Cfg, debug_path=None):
         return empty
 
     dets = []
-    # one row per component when dumping: [label_id, n_cells, support,
-    # cx, cy, radius, verdict]. Rejected components keep NaN geometry where it
-    # was never computed -- the raster is what locates them.
     dbg = [] if debug_path is not None else None
 
     for label_id, sl in enumerate(ndimage.find_objects(labels), start=1):
@@ -1000,7 +835,6 @@ STATUS_NAME = {UNVISITED: "UNVISITED", VISITED: "VISITED"}
 
 
 class Tree:
-    """One row of the global list."""
 
     __slots__ = ("gid", "x", "y", "r", "status", "discovery_order",
                  "n_obs", "last_frame")
@@ -1015,33 +849,7 @@ class Tree:
 
 
 class TreeRegistry:
-    """Global target list, maintained by Algorithm 2 (persistent identity
-    association).
-
-    Step 1 -- greedy nearest-neighbour matching, strictly one-to-one. Every
-        (component, entry) pair inside d_match is considered in ascending
-        distance order and taken only if BOTH sides are still free, so one
-        entry can never absorb two components of the same scan. A matched entry
-        keeps its global_id, status and discovery_order -- that is what makes
-        the identity persistent -- and absorbs the detection's geometry.
-        Components left unmatched start new entries at status UNVISITED.
-
-    Step 2 -- global overlap merging. Two entries whose circles overlap,
-        |c_i - c_j| < r_i + r_j, are the same tree found twice, so they
-        collapse into one. The surviving row keeps the lower global_id, the
-        earlier discovery_order and max(status), VISITED outranking UNVISITED.
-
-    Line 6, "Update G_j.c, G_j.r from C_i", is a straight REPLACEMENT. It can
-    be, because Algorithm 1 runs on the accumulated occupancy map: the
-    component's centroid already reflects every observation of that trunk so
-    far, so the averaging lives in the map and the registry does not repeat it.
-    Blending a map-derived estimate into the entry would double-count, and
-    blending by r^2 (lines 15-16) would be worse still -- that formula carries
-    no observation count, so it drags a 500-observation entry exactly as far as
-    a 1-observation one, letting entries walk across the map. Lines 15-16 apply
-    only to step 2, where both sides really are equally-established estimates.
-    """
-
+  
     def __init__(self, d_match, cell, merge_floor):
         self.d_match = d_match
         self.cell = cell
@@ -1072,9 +880,8 @@ class TreeRegistry:
     # ------------------------------------------------------------------ #
     @staticmethod
     def _blend(xa, ya, ra, xb, yb, rb):
-        """Algorithm 2, lines 15-16. Step 2 only -- see the class docstring."""
         wa, wb = ra * ra, rb * rb
-        if wa + wb <= 0.0:                       # both degenerate; plain mean
+        if wa + wb <= 0.0:                     
             return (xa + xb) / 2.0, (ya + yb) / 2.0, (ra + rb) / 2.0
         return ((wa * xa + wb * xb) / (wa + wb),
                 (wa * ya + wb * yb) / (wa + wb),
@@ -1123,12 +930,7 @@ class TreeRegistry:
             if i in taken_det:
                 continue
             x, y, r = dets[i]
-            # A leftover component whose circle overlaps an entry that already
-            # matched this scan is another piece of that same tree (the slab cut
-            # one crown into several components). Step 2 would merge it straight
-            # back -- same overlap test -- so making it a new identity only
-            # churns gids and drags the entry's centroid toward the fragment
-            # every cycle. Drop it instead.
+            
             host = next((g for g in self._neighbours(x, y) if g in taken_gid
                          and math.hypot(self.trees[g].x - x, self.trees[g].y - y)
                          < max(self.trees[g].r + r, self.merge_floor)),
@@ -1148,8 +950,7 @@ class TreeRegistry:
         return events
 
     def _merge_overlaps(self):
-        """Collapse overlapping entries. One pass over the list as specified;
-        it runs every frame, so any longer chain resolves on later frames."""
+        
         events = []
         for gi in sorted(self.trees):
             while True:
@@ -1164,7 +965,7 @@ class TreeRegistry:
                     tj = self.trees.get(gj)
                     if tj is None:
                         continue
-                    merge_dist = max(ti.r + tj.r, self.merge_floor) #added to cater small trees, if ri+rj is lesser than cj-ci so added  
+                    merge_dist = max(ti.r + tj.r, self.merge_floor)  
                     if math.hypot(ti.x - tj.x, ti.y - tj.y) < merge_dist:
                     # if math.hypot(ti.x - tj.x, ti.y - tj.y) < ti.r + tj.r:
                         gone = gj
@@ -1200,14 +1001,6 @@ class TreeRegistry:
 
 
 def read_xyzt(msg):
-    """(N,3) float64 xyz in the LiDAR frame + (N,) int64 per-point offsets.
-
-    The per-point time field is called "t" on the Isaac Sim / Livox bag but
-    "time" on the Gazebo cloud (gazebo_sim/scripts/pointcloud_stamper.py), and
-    read_points raises on a field the message does not carry. So look at what
-    the message actually has and ask for that. Neither is also fine: the
-    offsets are returned but nothing downstream uses them.
-    """
     names = {f.name for f in msg.fields}
     tname = "t" if "t" in names else ("time" if "time" in names else None)
     fields = ("x", "y", "z") + ((tname,) if tname else ())
