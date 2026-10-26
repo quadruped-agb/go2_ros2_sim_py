@@ -1,3 +1,15 @@
+**This is to outline the process of setting up the current in-process navigation algorithm on your PC**
+Terminal 1:
+```bash
+# for a fresh build
+docker compose -f compose.yml build simulator
+```
+```bash
+# to get system up and running
+docker compose up simulator
+```
+
+
 ##### Note for forked version #####
 The world file used is go_sim/src/gazebo_sim/world/cafe.world
 In order to have this file use the correct file paths, run:
