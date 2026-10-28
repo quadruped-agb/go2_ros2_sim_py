@@ -60,7 +60,7 @@ class Cfg:
     voxel = 0.10            
     z_min = 0.15 #0.4 did not work        
     z_max = 0.5            
-    n_min = 20 #100->30 trees
+    n_min = 5 #100->30 trees
     detect_every = 10
     det_radius = 10.0        
     self_radius = 0.0      
