@@ -1,39 +1,46 @@
 #!/usr/bin/env python3
 """
-Frontier + tree-inspection exploration node (terminating version, v3).
+Frontier + tree-inspection exploration node (terminating version, v4).
 
-What changed vs. the previous version
--------------------------------------
-CLEARANCE
-  * has_clearance() is now a true circle (cell-centre distance) instead of a
-    square window. With 0.2 m cells the old 0.45 m setting really meant a
-    0.6 m square, which made most goals "unreachable". Default is now 0.30 m;
-    tree viewpoints fall back to 0.22 m. Nav2's own costmaps do the fine work.
+What changed vs. v3 (everything not listed here is unchanged)
+--------------------------------------------------------------
+TREE VIEWING-DISTANCE WINDOW  (new, all distances are TRUNK SURFACE -> robot centre)
+  * Every tree viewpoint, merged or not, must satisfy
+        TREE_DIST_MIN_M <= (centre distance - tree radius r) <= TREE_DIST_MAX_M
+    Defaults 0.7 m / 1.8 m (derivation in the constants block). Both are ROS
+    parameters (tree_dist_min_m / tree_dist_max_m) so you can overwrite them with
+    your own point-cloud-density numbers without touching the code.
+  * The old viewpoint lattice (radius steps 0/+0.4/-0.25/+0.8 m, angle steps
+    0/+-20/+-40 deg) already lived inside that window, so un-merged viewpoints
+    come out exactly where they did before.
 
-TREES  (every tree has 3 viewpoint SLOTS, 120 deg apart)
-  * A slot that fails in Nav2 is NOT abandoned. It goes into a cooldown, then
-    is retried at a different position (other radius / angle) around the same
-    tree. Only after MAX_SLOT_ATTEMPTS distinct positions failed (or no
-    feasible position exists for a long time) is it marked 'failed'.
-  * A tree is DONE when none of its slots is pending. The final report lists
-    every unreachable slot, so nothing disappears silently.
-  * Trees are created even when no position is feasible yet (previously they
-    were ignored forever: "no valid viewpoints yet").
-  * tree_min_visited (default 3): set to 1 later if one look per tree is enough.
-  * The turn-to-face spin happens only at the FIRST viewpoint reached for each tree.
+VIEWPOINT MERGING  (new)
+  * Pending viewpoints of DIFFERENT trees that lie within merge_radius_m (1.5 m)
+    of each other are merged into ONE viewpoint if a single point exists that
+    satisfies, for every tree it serves: the distance window, the slot's azimuth
+    tolerance (+-40 deg, the largest offset the old lattice already allowed),
+    obstacle clearance (0.30 m, 0.22 m fallback), the plot boundary, and a clear
+    line of sight to the trunk. Among feasible points the one with the best
+    WORST-CASE point density is chosen (see joint_viewpoint).
+  * A tree never gets two slots merged into the same point, so it still keeps its
+    3 azimuth slots; merging only lets several trees share one trip.
+  * If a merged viewpoint fails in Nav2, its members are un-merged, the position
+    is blacklisted for them, and they continue individually (no merge retry).
 
-FRONTIERS
-  * A frontier region is retired as soon as the robot has physically been
-    within FRONTIER_VISITED_RADIUS_M of it (if it is still unknown from there,
-    chasing it again will not help).
-  * Hard caps: max_frontier_goals and max_runtime_s.
+FACING  (changed: per tree, not "first viewpoint of a tree")
+  * A tree must be CAUGHT IN THE CAMERA at least once ('faced'). A tree whose
+    viewpoints are all used up but that was never faced is NOT done: the node
+    adds an extra viewpoint slot (max 2) to try again.
+  * At every tree-viewpoint arrival the robot first checks whether its current
+    heading already catches a tree, then spins to face every still-unfaced tree
+    that is in range with a clear line of sight (members of the merged viewpoint
+    and any other tree in range). Trees whose bearings differ by < 2 x camera
+    tolerance are caught with ONE spin. Success is decided from the real yaw read
+    back from TF, not from the Spin action's return code.
+  * Each tree is attempted at most MAX_FACE_TRIES (3) times in total and at most
+    once per arrival, so this cannot loop.
 
-COMPLETION
-  * Complete = no usable frontier + every tree slot visited/failed + nothing
-    queued, held for complete_hold_s. Then a report is printed and the node
-    exits (shutdown_on_complete:=false to keep it alive).
-  * Goal watchdog: a goal running longer than goal_timeout_s is cancelled and
-    counted as a failure (covers a robot that circles forever).
+Unchanged: frontier logic, watchdog / stall / escape logic, run limits, report.
 """
 
 import math
@@ -90,7 +97,7 @@ COVERAGE_DONE_PCT = 95.0
 CENTROID_BOUND_MARGIN_M = 0.0       # tree centroids outside the bounds are ignored (was 1.0)
 GOAL_BOUND_MARGIN_M = 0.0           # every goal must be inside the bounds (was 0.5)
 MIN_TREE_OBS = 10
-TREE_INSPECTION_RADIUS_M = 1.0
+TREE_INSPECTION_RADIUS_M = 1.0      # nominal standoff of the viewpoint lattice
 TREE_MATCH_RADIUS_M = 1.25
 MAX_NEW_TREES_PER_CYCLE = 4
 TREE_BATCH = 3
@@ -105,6 +112,40 @@ SLOT_DRY_LIMIT_S = 120.0            # no feasible position for this long (map co
 SYSTEMIC_DISTINCT = 4               # failures at this many DIFFERENT places with no success in between:
                                     # print a loud 'nav2 is the problem' error (counting continues)
 TREE_COOLDOWN_S = 40.0              # after a failure, move on to other trees for this long
+
+# ---- viewing-distance window (trunk SURFACE to robot centre) ----------------------
+# Point density on a surface facing the sensor falls with the inverse square of range:
+#     rho(d) = (point_rate / fov_solid_angle) * T / d^2      [points / m^2]
+# so the density relative to the reference standoff is  (D_REF / d)^2.
+#   D_REF = 1.0 m : the standoff the run has been using (TREE_INSPECTION_RADIUS_M)
+#   D_MAX         : density floor of 30 % of the reference  ->  D_REF / sqrt(0.30) = 1.83 m  -> 1.8 m
+#                   (1.8 m is also the farthest point the old lattice ever used)
+#   D_MIN         : robot circumscribed radius sqrt(0.35^2 + 0.175^2) = 0.39 m
+#                   + MIN_OBSTACLE_CLEARANCE_M 0.30 m = 0.69 m  -> 0.7 m
+#                   (so the robot can still turn in place next to the trunk)
+# Replace with your own numbers: D_MAX = sqrt(rate * T / (solid_angle * rho_required)).
+TREE_DIST_REF_M = TREE_INSPECTION_RADIUS_M
+TREE_DIST_MIN_M = 0.7
+TREE_DIST_MAX_M = 1.8
+
+# ---- viewpoint merging -------------------------------------------------------------
+# Two viewpoints that were each ~D_REF from their own tree and are R apart can be
+# replaced by their midpoint, which is at most R/2 farther from each tree:
+#     D_REF + R/2 <= D_MAX   ->   R <= 2 * (D_MAX - D_REF) = 1.6 m   -> 1.5 m (margin)
+# Candidate grouping only; the real acceptance test is joint_viewpoint().
+MERGE_RADIUS_M = 1.5
+MERGE_AZ_TOL_DEG = 40.0             # slots are 120 deg apart; +-40 keeps two views of one tree >= 40 deg apart
+MERGE_GRID_M = 0.1                  # lattice spacing of the joint-viewpoint search (<= half a 0.2 m cell)
+MERGE_MAX_TREES = 4                 # trees served by one merged viewpoint
+MERGE_MAX_EVAL = 200                # best-scored lattice points checked against the map per clearance pass
+
+# ---- facing (camera) -------------------------------------------------------------
+CAMERA_HFOV_DEG = 88.0              # ASSUMPTION: conservative camera horizontal field of view
+CAMERA_FOV_USE = 0.6                # use 60 % of the half-FOV so the trunk is not at the image edge
+FACE_RANGE_SLACK_M = 0.25           # robot may stop this far (nav2 xy tolerance) from the viewpoint
+MAX_FACE_TRIES = 3                  # spin attempts per tree over the whole run
+MAX_EXTRA_FACE_SLOTS = 2            # extra viewpoint slots a never-faced tree may get
+SPIN_CLEARANCE_M = 0.40             # ~ circumscribed radius 0.39 m: room to turn in place
 
 # ---------------- run limits ----------------
 GOAL_TIMEOUT_S = 90.0
@@ -150,6 +191,12 @@ class FrontierExplorer(Node):
         self.declare_parameter('min_tree_obs', MIN_TREE_OBS)
         self.declare_parameter('stall_timeout_s', STALL_TIMEOUT_S)
         self.declare_parameter('unstick_enabled', True)
+        # --- new in v4 ---
+        self.declare_parameter('tree_dist_min_m', TREE_DIST_MIN_M)
+        self.declare_parameter('tree_dist_max_m', TREE_DIST_MAX_M)
+        self.declare_parameter('merge_viewpoints', True)
+        self.declare_parameter('merge_radius_m', MERGE_RADIUS_M)
+        self.declare_parameter('camera_hfov_deg', CAMERA_HFOV_DEG)
 
         self.map_topic = self.get_parameter('map_topic').value
         self.base_frame = self.get_parameter('robot_base_frame').value
@@ -174,6 +221,17 @@ class FrontierExplorer(Node):
         self.min_tree_obs = self.get_parameter('min_tree_obs').value
         self.stall_timeout_s = self.get_parameter('stall_timeout_s').value
         self.unstick_enabled = self.get_parameter('unstick_enabled').value
+        self.tree_dist_min = float(self.get_parameter('tree_dist_min_m').value)
+        self.tree_dist_max = float(self.get_parameter('tree_dist_max_m').value)
+        if self.tree_dist_min <= 0.0 or self.tree_dist_min >= self.tree_dist_max:
+            self.get_logger().warn(
+                f'invalid tree distance window [{self.tree_dist_min}, {self.tree_dist_max}] '
+                f'-- using defaults [{TREE_DIST_MIN_M}, {TREE_DIST_MAX_M}]')
+            self.tree_dist_min, self.tree_dist_max = TREE_DIST_MIN_M, TREE_DIST_MAX_M
+        self.merge_enabled = bool(self.get_parameter('merge_viewpoints').value)
+        self.merge_radius = float(self.get_parameter('merge_radius_m').value)
+        self.face_tol = math.radians(
+            0.5 * float(self.get_parameter('camera_hfov_deg').value) * CAMERA_FOV_USE)
 
         # live tree registry: rows of [gid, x, y, r, status, disc, n_obs]
         tree_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
@@ -227,7 +285,8 @@ class FrontierExplorer(Node):
         self.complete_since = None
         self.finished = False
         self.fail_keys = set()
-        self.spin_tree = None
+        self.face_ctx = None                # {'trees': ids to re-check, 'tried': ids spun at this arrival}
+        self.merge_fail_cache = set()       # joint viewpoints already proven infeasible
         self.stall_ref = None               # (x, y, t) where the 'not moving' timer started
         self.escaping = False
         self.escape_until = 0.0
@@ -256,6 +315,11 @@ class FrontierExplorer(Node):
             f'(tree_min_visited={self.tree_min_visited}, '
             f'max_frontier_goals={self.max_frontier_goals}, '
             f'max_runtime_s={self.max_runtime_s:.0f}, goal_timeout_s={self.goal_timeout_s:.0f})')
+        self.get_logger().info(
+            f'Tree viewing window {self.tree_dist_min:.2f}-{self.tree_dist_max:.2f} m from trunk '
+            f'surface; merge={"on" if self.merge_enabled else "off"} (radius '
+            f'{self.merge_radius:.2f} m); camera catch tolerance '
+            f'+-{math.degrees(self.face_tol):.0f} deg')
 
     # ------------------------------------------------------------------
     # basic callbacks / helpers
@@ -281,6 +345,10 @@ class FrontierExplorer(Node):
         except Exception as e:
             self.get_logger().warn(f'tf lookup for yaw failed: {e}')
             return None
+
+    @staticmethod
+    def _wrap(a):
+        return math.atan2(math.sin(a), math.cos(a))
 
     def trees_cb(self, msg):
         rows = np.array(msg.data, dtype=np.float64).reshape(-1, 7)
@@ -473,6 +541,11 @@ class FrontierExplorer(Node):
         robot_xy = self.get_robot_pose_xy()
         if robot_xy is None:
             return
+
+        # share viewpoints between nearby trees. Safe here: no goal is queued or in
+        # flight, so no queued goal can refer to a position that is about to change.
+        if self.merge_enabled:
+            self.merge_viewpoints(data, grid_msg)
 
         n_pending = self.count_pending_trees()
         n_ready = self.count_ready_trees()
@@ -696,11 +769,21 @@ class FrontierExplorer(Node):
         return None
 
     @staticmethod
-    def new_slot(base_angle):
+    def new_slot(base_angle, extra=False):
         return {'angle': base_angle, 'state': 'pending',   # pending|visited|failed|skipped
                 'cur': None,        # (x, y, yaw) currently assigned position
                 'bad': [],          # positions that failed in nav2
-                'attempts': 0, 'cool': 0.0, 'dry_t0': None}
+                'attempts': 0, 'cool': 0.0, 'dry_t0': None,
+                'merged': False,    # cur is shared with a slot of another tree
+                'no_merge': False,  # a merged viewpoint failed: stay individual
+                'extra': extra}     # added because the tree was never faced
+
+    @staticmethod
+    def slot_index(tree, slot):
+        for k, s in enumerate(tree['slots']):
+            if s is slot:
+                return k
+        return -1
 
     def count_pending_trees(self):
         return sum(1 for t in self.trees
@@ -739,6 +822,7 @@ class FrontierExplorer(Node):
         return n
 
     def find_tree_vp(self, gx, gy):
+        """First slot (any state) whose position is (gx, gy)."""
         for t in self.trees:
             for s in t['slots']:
                 c = s['cur']
@@ -746,34 +830,86 @@ class FrontierExplorer(Node):
                     return t, s
         return None
 
+    def find_tree_vps(self, gx, gy):
+        """ALL pending slots at (gx, gy): more than one when the viewpoint is merged."""
+        out = []
+        for t in self.trees:
+            for s in t['slots']:
+                c = s['cur']
+                if (s['state'] == 'pending' and c is not None
+                        and abs(c[0] - gx) < 0.02 and abs(c[1] - gy) < 0.02):
+                    out.append((t, s))
+        return out
+
+    def face_exhausted(self, tree):
+        return tree['faced'] or tree['face_tries'] >= MAX_FACE_TRIES
+
+    def add_face_slot(self, tree):
+        """The tree has no pending viewpoint left but was never caught in the camera:
+        add one more slot (max MAX_EXTRA_FACE_SLOTS), first on the side the robot is on."""
+        if self.budget_hit or tree['gave_up'] or tree['extra_slots'] >= MAX_EXTRA_FACE_SLOTS:
+            return False
+        angles = []
+        xy = self.get_robot_pose_xy()
+        if xy is not None:
+            angles.append(math.atan2(xy[1] - tree['y'], xy[0] - tree['x']))
+        angles += [s['angle'] for s in tree['slots'] if not s['extra']]
+        for a in angles:
+            if self.slot_possible(tree, a):
+                tree['slots'].append(self.new_slot(a, extra=True))
+                tree['extra_slots'] += 1
+                self.get_logger().info(
+                    f"Tree #{tree['id']} has not been caught in the camera yet -- adding "
+                    f"extra viewpoint slot {tree['extra_slots']}/{MAX_EXTRA_FACE_SLOTS} "
+                    f"at {math.degrees(a):.0f} deg")
+                return True
+        return False
+
     def update_tree_done(self, tree):
         if tree['done']:
             return
         n_ok = sum(1 for s in tree['slots'] if s['state'] == 'visited')
-        if n_ok >= self.tree_min_visited:
+        face_ok = self.face_exhausted(tree)
+        # enough viewpoints visited: drop the rest, but ONLY once the tree has been
+        # caught in the camera (or its spin attempts are used up)
+        if n_ok >= self.tree_min_visited and face_ok:
             for s in tree['slots']:
                 if s['state'] == 'pending':
                     s['state'] = 'skipped'
                     s['cur'] = None
+                    s['merged'] = False
         if any(s['state'] == 'pending' for s in tree['slots']):
+            return
+        if not face_ok and self.add_face_slot(tree):
             return
         tree['done'] = True
         n_bad = sum(1 for s in tree['slots'] if s['state'] == 'failed')
         extra = f', {n_bad} UNREACHABLE' if n_bad else ''
+        seen = 'caught in camera' if tree['faced'] else 'NOT CAUGHT IN CAMERA'
         self.get_logger().info(
             f"Tree #{tree['id']} at ({tree['x']:.1f},{tree['y']:.1f}) DONE "
-            f"({n_ok} viewpoint(s) visited{extra}). "
+            f"({n_ok} viewpoint(s) visited{extra}; {seen}). "
             f"{sum(1 for t in self.trees if t['done'])}/{len(self.trees)} trees done.")
 
-    def slot_candidates(self, data, grid_msg, tree, base_angle):
-        """All feasible positions for one slot, best first."""
+    # ---- viewpoint geometry --------------------------------------------------
+    def slot_radii(self, tree):
+        """Centre distances of the old lattice that fall inside the viewing window."""
         standoff = min(tree['r'], 0.6) + TREE_INSPECTION_RADIUS_M
         out = []
-        for clearance in (MIN_OBSTACLE_CLEARANCE_M, TREE_FALLBACK_CLEARANCE_M):
-            for dr in VP_RADIUS_STEPS_M:
-                rad = standoff + dr
-                if rad < tree['r'] + 0.6:
-                    continue
+        for dr in VP_RADIUS_STEPS_M:
+            rad = standoff + dr
+            ds = rad - tree['r']                       # trunk surface -> robot centre
+            if self.tree_dist_min - 1e-6 <= ds <= self.tree_dist_max + 1e-6:
+                out.append(rad)
+        return out
+
+    def slot_candidates(self, data, grid_msg, tree, base_angle, clearances=None):
+        """All feasible positions for one slot, best first."""
+        if clearances is None:
+            clearances = (MIN_OBSTACLE_CLEARANCE_M, TREE_FALLBACK_CLEARANCE_M)
+        out = []
+        for clearance in clearances:
+            for rad in self.slot_radii(tree):
                 for da in VP_ANGLE_STEPS_DEG:
                     ang = base_angle + math.radians(da)
                     gx = tree['x'] + rad * math.cos(ang)
@@ -788,18 +924,17 @@ class FrontierExplorer(Node):
         return out
 
     def pick_slot_candidate(self, data, grid_msg, tree, slot):
-        for c in self.slot_candidates(data, grid_msg, tree, slot['angle']):
+        # extra (never-faced) slots prefer room to turn in place
+        clearances = ((SPIN_CLEARANCE_M, MIN_OBSTACLE_CLEARANCE_M, TREE_FALLBACK_CLEARANCE_M)
+                      if slot['extra'] else None)
+        for c in self.slot_candidates(data, grid_msg, tree, slot['angle'], clearances):
             if all(math.hypot(c[0] - bx, c[1] - by) > 0.3 for bx, by in slot['bad']):
                 return c
         return None
 
     def slot_possible(self, tree, base_angle):
         """Could this slot EVER have a position inside the boundary (map-independent)?"""
-        standoff = min(tree['r'], 0.6) + TREE_INSPECTION_RADIUS_M
-        for dr in VP_RADIUS_STEPS_M:
-            rad = standoff + dr
-            if rad < tree['r'] + 0.6:
-                continue
+        for rad in self.slot_radii(tree):
             for da in VP_ANGLE_STEPS_DEG:
                 ang = base_angle + math.radians(da)
                 if self.in_bounds_margin(tree['x'] + rad * math.cos(ang),
@@ -808,6 +943,152 @@ class FrontierExplorer(Node):
                     return True
         return False
 
+    def line_of_sight(self, data, grid_msg, px, py, tree):
+        """No occupied cell between (px, py) and the trunk (the trunk's own cells are
+        excluded by stopping r + 1.5 cells short of its centre)."""
+        res = grid_msg.info.resolution
+        ox = grid_msg.info.origin.position.x
+        oy = grid_msg.info.origin.position.y
+        h, w = data.shape
+        dx, dy = tree['x'] - px, tree['y'] - py
+        dist = math.hypot(dx, dy)
+        if dist < 1e-6:
+            return True
+        stop = dist - (tree['r'] + 1.5 * res)
+        if stop <= res:
+            return True
+        n = int(stop / (0.5 * res)) + 1
+        ts = np.linspace(0.0, stop, n)
+        cols = np.floor((px + dx / dist * ts - ox) / res).astype(int)
+        rows = np.floor((py + dy / dist * ts - oy) / res).astype(int)
+        inside = (rows >= 0) & (rows < h) & (cols >= 0) & (cols < w)
+        if not inside.any():
+            return True
+        return not np.any(data[rows[inside], cols[inside]] >= OCC_THRESHOLD)
+
+    # ---- viewpoint merging ------------------------------------------------------
+    def merge_key(self, members):
+        return tuple(sorted((t['id'], self.slot_index(t, s),
+                             round(s['cur'][0], 2), round(s['cur'][1], 2)) for t, s in members))
+
+    def joint_viewpoint(self, data, grid_msg, members):
+        """One position that serves every (tree, slot) in `members`, or None.
+
+        Hard constraints, per member:  distance window, azimuth within MERGE_AZ_TOL_DEG of
+        the slot's nominal angle, not within 0.3 m of a position that already failed for
+        that slot, in bounds, obstacle clearance (0.30 m, 0.22 m fallback) and a clear
+        line of sight to the trunk.
+        Objective (minimise) on the lattice points that pass the cheap geometric tests:
+            cost = 10 * (1 - min_i q_i) + mean_i |az_dev_i|/tol + mean_i |d_i - D_REF|/(D_MAX-D_MIN)
+        with q_i = min(1, (D_REF/d_i)^2) the relative point density at tree i. The first
+        term makes the WORST-served tree decide; the others keep the viewpoint close to
+        the old azimuths and to the reference distance."""
+        dmin, dmax, ref = self.tree_dist_min, self.tree_dist_max, TREE_DIST_REF_M
+        az_tol = math.radians(MERGE_AZ_TOL_DEG)
+        x0 = max(t['x'] - (t['r'] + dmax) for t, _ in members)
+        x1 = min(t['x'] + (t['r'] + dmax) for t, _ in members)
+        y0 = max(t['y'] - (t['r'] + dmax) for t, _ in members)
+        y1 = min(t['y'] + (t['r'] + dmax) for t, _ in members)
+        if x0 > x1 or y0 > y1:
+            return None
+        gx_, gy_ = np.meshgrid(np.arange(x0, x1 + 1e-9, MERGE_GRID_M),
+                               np.arange(y0, y1 + 1e-9, MERGE_GRID_M))
+        X, Y = gx_.ravel(), gy_.ravel()
+        m = self.goal_bound_margin
+        ok = ((X >= self.bounds_min_x - m) & (X <= self.bounds_max_x + m) &
+              (Y >= self.bounds_min_y - m) & (Y <= self.bounds_max_y + m))
+        min_q = np.ones_like(X)
+        az_sum = np.zeros_like(X)
+        d_sum = np.zeros_like(X)
+        for t, s in members:
+            dx, dy = X - t['x'], Y - t['y']
+            ds = np.hypot(dx, dy) - t['r']
+            ok &= (ds >= dmin - 1e-6) & (ds <= dmax + 1e-6)
+            az = np.arctan2(dy, dx)
+            dev = np.abs(np.arctan2(np.sin(az - s['angle']), np.cos(az - s['angle'])))
+            ok &= dev <= az_tol + 1e-6
+            min_q = np.minimum(min_q, np.minimum(1.0, (ref / np.maximum(ds, 1e-3)) ** 2))
+            az_sum += dev / az_tol
+            d_sum += np.abs(ds - ref) / (dmax - dmin)
+        idx = np.nonzero(ok)[0]
+        if idx.size == 0:
+            return None
+        cost = 10.0 * (1.0 - min_q) + az_sum / len(members) + d_sum / len(members)
+        order = idx[np.argsort(cost[idx], kind='stable')][:MERGE_MAX_EVAL]
+        for clearance in (MIN_OBSTACLE_CLEARANCE_M, TREE_FALLBACK_CLEARANCE_M):
+            for i in order:
+                x, y = float(X[i]), float(Y[i])
+                if any(math.hypot(x - bx, y - by) <= 0.3
+                       for _, s in members for bx, by in s['bad']):
+                    continue
+                if not self.has_clearance(data, grid_msg, x, y, clearance, outside_ok=True):
+                    continue
+                if not all(self.line_of_sight(data, grid_msg, x, y, t) for t, _ in members):
+                    continue
+                bs = [math.atan2(t['y'] - y, t['x'] - x) for t, _ in members]
+                yaw = math.atan2(sum(math.sin(b) for b in bs), sum(math.cos(b) for b in bs))
+                return (x, y, yaw)
+        return None
+
+    def merge_viewpoints(self, data, grid_msg):
+        """Greedy grouping of pending viewpoints of DIFFERENT trees that are within
+        merge_radius of each other. Returns the number of merged viewpoints created."""
+        now = time.monotonic()
+        items = []
+        for t in self.trees:
+            if t['done'] or now < t['cool']:
+                continue
+            for s in t['slots']:
+                if (s['state'] == 'pending' and s['cur'] is not None and now >= s['cool']
+                        and not s['merged'] and not s['no_merge']):
+                    items.append((t, s))
+        if len(items) < 2:
+            return 0
+        items.sort(key=lambda ts: (ts[1]['cur'][0], ts[1]['cur'][1]))
+        used = set()
+        n_groups = 0
+        for i, (ti, si) in enumerate(items):
+            if i in used:
+                continue
+            ax, ay = si['cur'][0], si['cur'][1]
+            nbrs = sorted((j for j in range(len(items)) if j != i and j not in used),
+                          key=lambda j: math.hypot(items[j][1]['cur'][0] - ax,
+                                                   items[j][1]['cur'][1] - ay))
+            group, gidx, best = [(ti, si)], [i], None
+            for j in nbrs:
+                tj, sj = items[j]
+                if math.hypot(sj['cur'][0] - ax, sj['cur'][1] - ay) > self.merge_radius:
+                    break                                   # sorted: all further ones are farther
+                if len(group) >= MERGE_MAX_TREES:
+                    break
+                if any(tj is t for t, _ in group):
+                    continue                                # one slot per tree in a group
+                trial = group + [(tj, sj)]
+                key = self.merge_key(trial)
+                if key in self.merge_fail_cache:
+                    continue
+                jv = self.joint_viewpoint(data, grid_msg, trial)
+                if jv is None:
+                    self.merge_fail_cache.add(key)
+                    continue
+                group, best = trial, jv
+                gidx.append(j)
+            if best is None or len(group) < 2:
+                continue
+            for t, s in group:
+                s['cur'] = best
+                s['merged'] = True
+            used.update(gidx)
+            n_groups += 1
+            desc = ', '.join(
+                f"#{t['id']} ({math.hypot(best[0] - t['x'], best[1] - t['y']) - t['r']:.2f} m)"
+                for t, _ in group)
+            self.get_logger().info(
+                f'Merged {len(group)} viewpoints into one at ({best[0]:.2f},{best[1]:.2f}); '
+                f'trees (trunk-surface distance): {desc}')
+        return n_groups
+
+    # ---- trees from the registry --------------------------------------------------
     def maintain_tree_slots(self, data, grid_msg):
         """Give every pending slot a position; retire slots that cannot get one."""
         now = time.monotonic()
@@ -820,6 +1101,7 @@ class FrontierExplorer(Node):
                 cand = self.pick_slot_candidate(data, grid_msg, t, s)
                 if cand is not None:
                     s['cur'] = cand
+                    s['merged'] = False
                     s['dry_t0'] = None
                 elif s['dry_t0'] is None:
                     s['dry_t0'] = now
@@ -862,7 +1144,10 @@ class FrontierExplorer(Node):
                 'id': self.next_tree_id, 'x': tx, 'y': ty, 'r': r,
                 'slots': [self.new_slot(k * (2.0 * math.pi / 3.0)) for k in range(3)],
                 'started': False, 'done': False, 'cool': 0.0, 'fails': 0,
-                'spun': False,      # already turned to face this tree once?
+                'faced': False,         # caught in the camera at least once?
+                'face_tries': 0,        # spin attempts so far
+                'extra_slots': 0,       # extra viewpoint slots added for facing
+                'gave_up': False,
             }
             for s in tree['slots']:
                 if not self.slot_possible(tree, s['angle']):
@@ -878,7 +1163,8 @@ class FrontierExplorer(Node):
         return added
 
     def plan_tree_tour(self, robot_xy):
-        """Goals for all ready tree viewpoints, one whole tree at a time."""
+        """Goals for all ready tree viewpoints, one whole tree at a time. A merged
+        viewpoint is listed once, however many trees it serves."""
         now = time.monotonic()
         trees = []
         for t in self.trees:
@@ -891,13 +1177,17 @@ class FrontierExplorer(Node):
         if not trees:
             return []
         order = self.tsp_order([(t['x'], t['y']) for t, _ in trees], robot_xy)
-        goals, cur_xy = [], robot_xy
+        goals, cur_xy, seen = [], robot_xy, set()
         for k in order:
             pend = list(trees[k][1])
             while pend:
                 s = min(pend, key=lambda s: math.hypot(s['cur'][0] - cur_xy[0],
                                                        s['cur'][1] - cur_xy[1]))
                 pend.remove(s)
+                key = (round(s['cur'][0], 3), round(s['cur'][1], 3))
+                if key in seen:
+                    continue
+                seen.add(key)
                 goals.append(s['cur'])
                 cur_xy = (s['cur'][0], s['cur'][1])
         return goals
@@ -909,13 +1199,14 @@ class FrontierExplorer(Node):
         self.done_frontier_centroids.append((cx, cy))
 
     def register_goal_success(self, gx, gy):
+        """Mark every slot at this position visited (several if the viewpoint is merged).
+        update_tree_done is NOT called here: it needs the facing result, see face_finish()."""
         self.fail_keys.clear()
-        found = self.find_tree_vp(gx, gy)
-        if found:
-            tree, slot = found
-            slot['state'] = 'visited'
-            tree['started'] = True
-            self.update_tree_done(tree)
+        matches = self.find_tree_vps(gx, gy)
+        if matches:
+            for tree, slot in matches:
+                slot['state'] = 'visited'
+                tree['started'] = True
         else:
             c = self.goal_centroids.pop((round(gx, 2), round(gy, 2)), None)
             if c is not None:
@@ -925,8 +1216,8 @@ class FrontierExplorer(Node):
 
     def register_goal_failure(self, gx, gy):
         self.goal_queue.clear()
-        found = self.find_tree_vp(gx, gy)
-        key = ('t', found[0]['id']) if found else ('g', round(gx), round(gy))
+        matches = self.find_tree_vps(gx, gy)
+        key = ('t', matches[0][0]['id']) if matches else ('g', round(gx), round(gy))
         self.fail_keys.add(key)
 
         if len(self.fail_keys) >= SYSTEMIC_DISTINCT:
@@ -939,37 +1230,40 @@ class FrontierExplorer(Node):
 
         self.failed_goals.append((gx, gy, time.monotonic()))
 
-        found = self.find_tree_vp(gx, gy)
-        if found:
-            tree, slot = found
-            slot['attempts'] += 1
-            slot['bad'].append((slot['cur'][0], slot['cur'][1]))
-            slot['cur'] = None                       # next position is picked after the cooldown
-            slot['cool'] = time.monotonic() + SLOT_COOLDOWN_S
-            tree['cool'] = time.monotonic() + TREE_COOLDOWN_S    # let the tour visit other trees first
-            tree['started'] = True
-            tree['fails'] += 1
-            if (tree['fails'] >= TREE_GIVEUP_FAILS and
-                    not any(x['state'] == 'visited' for x in tree['slots'])):
-                for x in tree['slots']:
-                    if x['state'] == 'pending':
-                        x['state'] = 'failed'
-                        x['cur'] = None
-                self.get_logger().warn(
-                    f"Tree #{tree['id']} at ({tree['x']:.1f},{tree['y']:.1f}): "
-                    f"{tree['fails']} failed goals and no viewpoint ever reached -- giving up on this tree")
+        if matches:
+            now = time.monotonic()
+            for tree, slot in matches:
+                slot['attempts'] += 1
+                slot['bad'].append((slot['cur'][0], slot['cur'][1]))
+                if slot['merged']:
+                    slot['no_merge'] = True          # un-merge: carry on individually
+                slot['merged'] = False
+                slot['cur'] = None                   # next position is picked after the cooldown
+                slot['cool'] = now + SLOT_COOLDOWN_S
+                tree['cool'] = now + TREE_COOLDOWN_S    # let the tour visit other trees first
+                tree['started'] = True
+                tree['fails'] += 1
+                if (tree['fails'] >= TREE_GIVEUP_FAILS and
+                        not any(x['state'] == 'visited' for x in tree['slots'])):
+                    tree['gave_up'] = True
+                    for x in tree['slots']:
+                        if x['state'] == 'pending':
+                            x['state'] = 'failed'
+                            x['cur'] = None
+                            x['merged'] = False
+                    self.get_logger().warn(
+                        f"Tree #{tree['id']} at ({tree['x']:.1f},{tree['y']:.1f}): "
+                        f"{tree['fails']} failed goals and no viewpoint ever reached -- giving up on this tree")
+                elif slot['attempts'] >= MAX_SLOT_ATTEMPTS:
+                    slot['state'] = 'failed'
+                    self.get_logger().warn(
+                        f"Tree #{tree['id']}: viewpoint failed {slot['attempts']} times "
+                        f"-- marking unreachable")
+                else:
+                    self.get_logger().info(
+                        f"Tree #{tree['id']}: viewpoint failed ({slot['attempts']}/"
+                        f"{MAX_SLOT_ATTEMPTS}); will retry from a different position later")
                 self.update_tree_done(tree)
-                return
-            if slot['attempts'] >= MAX_SLOT_ATTEMPTS:
-                slot['state'] = 'failed'
-                self.get_logger().warn(
-                    f"Tree #{tree['id']}: viewpoint failed {slot['attempts']} times "
-                    f"-- marking unreachable")
-            else:
-                self.get_logger().info(
-                    f"Tree #{tree['id']}: viewpoint failed ({slot['attempts']}/"
-                    f"{MAX_SLOT_ATTEMPTS}); will retry from a different position later")
-            self.update_tree_done(tree)
             return
 
         c = self.goal_centroids.pop((round(gx, 2), round(gy, 2)), None)
@@ -997,6 +1291,121 @@ class FrontierExplorer(Node):
                                   if math.hypot(t[0] - gx, t[1] - gy) > 0.3]
 
     # ------------------------------------------------------------------
+    # facing: every tree must be caught in the camera at least once
+    # ------------------------------------------------------------------
+    def tree_bearing_if_visible(self, tree, px, py, data, grid_msg):
+        """Bearing from (px, py) to the tree if it is in range and not occluded, else None."""
+        ds = math.hypot(tree['x'] - px, tree['y'] - py) - tree['r']
+        if ds > self.tree_dist_max + FACE_RANGE_SLACK_M:
+            return None
+        if not self.line_of_sight(data, grid_msg, px, py, tree):
+            return None
+        return math.atan2(tree['y'] - py, tree['x'] - px)
+
+    def credit_faced(self, px, py, yaw, data, grid_msg):
+        """Mark every in-range, unoccluded tree that lies within the camera tolerance
+        of the robot's heading as faced."""
+        for t in self.trees:
+            if t['faced']:
+                continue
+            b = self.tree_bearing_if_visible(t, px, py, data, grid_msg)
+            if b is None or abs(self._wrap(b - yaw)) > self.face_tol:
+                continue
+            t['faced'] = True
+            if self.face_ctx is not None:
+                self.face_ctx['trees'].add(t['id'])
+            self.get_logger().info(
+                f"Tree #{t['id']} at ({t['x']:.1f},{t['y']:.1f}) caught in the camera "
+                f"(bearing error {math.degrees(abs(self._wrap(b - yaw))):.0f} deg)")
+
+    def begin_face_sequence(self, affected_trees):
+        """Called on arrival at a tree viewpoint. True if a spin was started (the caller
+        must then leave `exploring` set); False if nothing needs facing."""
+        self.face_ctx = {'trees': {t['id'] for t in affected_trees}, 'tried': set()}
+        return self.face_step()
+
+    def face_step(self):
+        ctx = self.face_ctx
+        if ctx is None:
+            return False
+        grid_msg = self.latest_map
+        xy = self.get_robot_pose_xy()
+        yaw = self.get_robot_yaw()
+        if grid_msg is None or xy is None or yaw is None:
+            self.face_finish()
+            return False
+        data = np.array(grid_msg.data, dtype=np.int8).reshape(
+            grid_msg.info.height, grid_msg.info.width)
+
+        # (1) the current heading may already catch a tree -- no spin needed for those
+        self.credit_faced(xy[0], xy[1], yaw, data, grid_msg)
+
+        # (2) trees still to face from here: unfaced, attempts left, not tried at this
+        #     arrival yet, in range and unoccluded (members of this viewpoint and others)
+        targets = []
+        for t in self.trees:
+            if t['faced'] or t['face_tries'] >= MAX_FACE_TRIES or t['id'] in ctx['tried']:
+                continue
+            b = self.tree_bearing_if_visible(t, xy[0], xy[1], data, grid_msg)
+            if b is not None:
+                targets.append((t, b))
+        if not targets:
+            self.face_finish()
+            return False
+
+        # (3) one spin may catch several trees: start with the tree needing the smallest
+        #     turn, then add trees while the whole bundle spans <= 2 x camera tolerance
+        targets.sort(key=lambda tb: abs(self._wrap(tb[1] - yaw)))
+        b0 = targets[0][1]
+        lo = hi = 0.0
+        group = []
+        for t, b in sorted(targets, key=lambda tb: abs(self._wrap(tb[1] - b0))):
+            rel = self._wrap(b - b0)
+            nlo, nhi = min(lo, rel), max(hi, rel)
+            if nhi - nlo <= 2.0 * self.face_tol:
+                lo, hi = nlo, nhi
+                group.append(t)
+        target_yaw = b0 + 0.5 * (lo + hi)
+        for t in group:
+            t['face_tries'] += 1
+            ctx['tried'].add(t['id'])
+            ctx['trees'].add(t['id'])
+        return self.send_face_spin(target_yaw, group)
+
+    def face_finish(self):
+        """End of the facing sequence: now that 'faced' is known, re-evaluate the trees."""
+        ctx = self.face_ctx
+        self.face_ctx = None
+        if ctx is None:
+            return
+        for t in list(self.trees):
+            if t['id'] in ctx['trees']:
+                self.update_tree_done(t)
+
+    def send_face_spin(self, target_absolute_yaw, group):
+        current_yaw = self.get_robot_yaw()
+        if current_yaw is None:
+            self.get_logger().warn('Could not read current yaw, skipping facing spin')
+            self.face_finish()
+            return False
+        rel = self._wrap(target_absolute_yaw - current_yaw)
+
+        if not self.spin_client.wait_for_server(timeout_sec=2.0):
+            self.get_logger().warn('spin action server not available, skipping facing spin')
+            self.face_finish()
+            return False
+
+        goal_msg = Spin.Goal()
+        goal_msg.target_yaw = rel
+        goal_msg.time_allowance = Duration(sec=8)
+        ids = ', '.join(f"#{t['id']}" for t in group)
+        self.get_logger().info(
+            f'Facing tree(s) {ids}: spinning {math.degrees(rel):.0f} deg')
+        future = self.spin_client.send_goal_async(goal_msg)
+        future.add_done_callback(self.spin_response_cb)
+        return True
+
+    # ------------------------------------------------------------------
     # visualization
     # ------------------------------------------------------------------
     def record_trail(self):
@@ -1022,7 +1431,8 @@ class FrontierExplorer(Node):
     def publish_planning_markers(self, robot_xy):
         """blue spheres: frontier candidates | orange cubes: pending trees |
         grey cubes: DONE trees | green arrows: pending tree viewpoints |
-        yellow arrows: dummy targets | magenta: planned route."""
+        cyan arrows: MERGED tree viewpoints | yellow arrows: dummy targets |
+        magenta: planned route."""
         markers = MarkerArray()
         clear = Marker()
         clear.action = Marker.DELETEALL
@@ -1072,7 +1482,8 @@ class FrontierExplorer(Node):
                 if s['state'] == 'pending' and s['cur'] is not None:
                     markers.markers.append(
                         make_arrow(s['cur'][0], s['cur'][1], s['cur'][2],
-                                   (0.0, 1.0, 0.0), 'tree_viewpoints'))
+                                   (0.0, 1.0, 1.0) if s['merged'] else (0.0, 1.0, 0.0),
+                                   'tree_viewpoints'))
         for (gx, gy, _bonus, yaw) in self.dummy_targets:
             markers.markers.append(make_arrow(gx, gy, yaw, (1.0, 1.0, 0.0), 'dummy_targets'))
 
@@ -1127,8 +1538,10 @@ class FrontierExplorer(Node):
             lines.append(
                 f"  tree #{t['id']} at ({t['x']:.1f},{t['y']:.1f}): "
                 f"{st.count('visited')} visited, {st.count('failed')} unreachable, "
-                f"{st.count('skipped')} skipped, {st.count('pending')} pending"
-                f"{'' if t['done'] else '  [NOT DONE]'}")
+                f"{st.count('skipped')} skipped, {st.count('pending')} pending, "
+                f"{t['face_tries']} spin attempt(s)"
+                f"{'' if t['done'] else '  [NOT DONE]'}"
+                f"{'' if t['faced'] else '  [NOT CAUGHT IN CAMERA]'}")
         return lines
 
     def announce_complete(self, data, reason):
@@ -1138,12 +1551,13 @@ class FrontierExplorer(Node):
         self.complete_elapsed = time.monotonic() - self.start_time
         pct = self.compute_coverage_pct(data)
         n_done = sum(1 for t in self.trees if t['done'])
+        n_faced = sum(1 for t in self.trees if t['faced'])
         n_vis = sum(1 for t in self.trees for s in t['slots'] if s['state'] == 'visited')
         n_bad = sum(1 for t in self.trees for s in t['slots'] if s['state'] == 'failed')
         self.get_logger().info(
             f'Exploration complete: {reason}. '
             f'{self.visited_frontier_count} goal(s) reached, '
-            f'{n_done}/{len(self.trees)} trees done '
+            f'{n_done}/{len(self.trees)} trees done, {n_faced}/{len(self.trees)} caught in camera '
             f'({n_vis} viewpoints visited, {n_bad} unreachable), '
             f'{len(self.done_frontier_centroids)} frontier regions retired. '
             f'Map coverage (known cells in grid): {pct:.1f}%.')
@@ -1175,6 +1589,7 @@ class FrontierExplorer(Node):
         print("frontier goals sent    : %d" % self.frontier_goals_sent)
         print("trees accepted         : %d" % len(self.trees))
         print("trees done             : %d" % sum(1 for t in self.trees if t['done']))
+        print("trees caught in camera : %d" % sum(1 for t in self.trees if t['faced']))
         print("frontier regions retired: %d" % len(self.done_frontier_centroids))
         print("centroids out of range : %d (at last registry update)" % self.n_centroids_outside)
         print("failed goals (active)  : %d" % len(self.failed_goals))
@@ -1450,11 +1865,10 @@ class FrontierExplorer(Node):
             self.watchdog_fired = False
             self.get_logger().info(f'Reached goal ({gx:.2f}, {gy:.2f})')
             self.visited_frontier_count += 1
-            found = self.find_tree_vp(gx, gy)
+            arrived = self.find_tree_vps(gx, gy)       # >1 entry when the viewpoint is merged
             self.register_goal_success(gx, gy)
-            if align_yaw is not None and found is not None and not found[0]['spun']:
-                self.send_align_spin(align_yaw, found[0])   # first viewpoint of this tree only
-                return
+            if arrived and self.begin_face_sequence([t for t, _ in arrived]):
+                return                                  # a facing spin is in flight
         elif status == 5 and not self.watchdog_fired:  # CANCELED by someone else
             self.get_logger().info(f'Goal to ({gx:.2f},{gy:.2f}) canceled')
         else:  # ABORTED, or cancelled by our own watchdog
@@ -1466,48 +1880,21 @@ class FrontierExplorer(Node):
         self.exploring = False
         self.explore_step()
 
-    def send_align_spin(self, target_absolute_yaw, tree=None):
-        current_yaw = self.get_robot_yaw()
-        if current_yaw is None:
-            self.get_logger().warn('Could not read current yaw, skipping alignment spin')
-            self.exploring = False
-            return
-        rel = math.atan2(math.sin(target_absolute_yaw - current_yaw),
-                         math.cos(target_absolute_yaw - current_yaw))
-
-        if not self.spin_client.wait_for_server(timeout_sec=2.0):
-            self.get_logger().warn('spin action server not available, skipping alignment')
-            self.exploring = False
-            return
-
-        goal_msg = Spin.Goal()
-        goal_msg.target_yaw = rel
-        goal_msg.time_allowance = Duration(sec=8)
-        self.spin_tree = tree
-        who = f"tree #{tree['id']}" if tree is not None else 'target'
-        self.get_logger().info(
-            f'Aligning to face {who}: spinning {math.degrees(rel):.0f} deg '
-            f'(only done once per tree)')
-        future = self.spin_client.send_goal_async(goal_msg)
-        future.add_done_callback(self.spin_response_cb)
-
     def spin_response_cb(self, future):
         goal_handle = future.result()
         if not goal_handle.accepted:
-            self.get_logger().warn('Alignment spin rejected')
-            self.spin_tree = None
+            self.get_logger().warn('Facing spin rejected')
+            self.face_finish()
             self.exploring = False
             return
         goal_handle.get_result_async().add_done_callback(self.spin_result_cb)
 
     def spin_result_cb(self, future):
-        try:
-            ok = future.result().status == 4   # SUCCEEDED
-        except Exception:
-            ok = False
-        if ok and self.spin_tree is not None:
-            self.spin_tree['spun'] = True      # do not spin again at this tree's other viewpoints
-        self.spin_tree = None
+        # Whatever the Spin action reported, face_step() re-reads the real heading from
+        # TF, credits the trees now in the camera, and starts the next spin if some
+        # in-range tree is still unfaced (each tree is tried once per arrival).
+        if self.face_step():
+            return
         self.exploring = False
         self.explore_step()
 
