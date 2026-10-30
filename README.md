@@ -1,3 +1,82 @@
+**This is to outline the process of setting up the current in-process navigation algorithm on your PC**
+
+Terminal 1:
+```bash
+# for a fresh build
+docker compose -f compose.yml build simulator
+```
+```bash
+# to get system up and running
+docker compose up simulator
+```
+
+Terminal 2:
+```bash
+docker compose up glim
+```
+
+Terminal 3:
+```bash
+docker exec -it simulator bash -c "
+    source /opt/ros/jazzy/setup.bash && cd /root/ws/src &&
+    rm -f debug_ccl/ccl_*.npz debug_ccl/registry_*.npy debug_ccl/events_*.json &&
+    python3 live_detection.py --ros-args \
+      -r /unitree_go2/lidar/point_cloud:=/robot1/points/points_timed"
+```
+
+Terminal 4:
+```bash
+# this is a temporary arrangement, will fix
+docker exec -it simulator bash -c "source install/setup.bash && ros2 run topic_tools relay /cmd_vel /robot1/cmd_vel"
+```
+
+Terminal 5:
+```bash
+# octomap
+docker exec -it simulator bash -c "source install/setup.bash && source /opt/ros/jazzy/setup.bash && \server octomap_server_node --rosros2 run octomap_server octomap_server_node --ros-args \solution:=0.2 -p frame_id:=map -p base_fra  -p resolution:=0.2 -p frame_id:=map -p base_frame_id:=base_link \x_range:=15.0 \
+  -p sensor_model.max_range:=15.0 \int_cloud_max_  -p point_cloud_min_z:=-0.05 -p point_cloud_max_z:=0.0 \ter_ground_plane:=false \
+  -p filter_ground_plane:=false \
+  -p latch:=false -r cloud_in:=/glim_ros/points"
+```
+
+Terminal 6:
+```bash
+# octomap
+docker exec -it simulator bash -c "source install/setup.bash && source /opt/ros/jazzy/setup.bash && \
+ros2 run octomap_server octomap_server_node --ros-args \
+  -r __node:=octomap_trunks -r __ns:=/trunks \
+  -p resolution:=0.1 -p frame_id:=map -p base_frame_id:=base_link \
+  -p sensor_model.max_range:=8.0 \
+  -p filter_ground_plane:=false -p latch:=false \ 
+  -r cloud_in:=/glim_ros/points"
+```
+Terminal 7:
+```bash
+# ground truth trees
+docker exec -it simulator bash -c "
+    source /opt/ros/jazzy/setup.bash &&
+    python3 /root/ws/src/rviz_trees.py --ros-args -p truth:=gazebo -p sensor_frame:=map"
+```
+Terminal 8:
+```bash
+# to view everything on rviz
+docker exec -it simulator bash -c "
+    source /opt/ros/jazzy/setup.bash &&
+    rviz2 -d /root/ws/src/gazebo_sim/rviz/gazebo_trees_view.rviz"
+```
+Terminal 9:
+```bash
+# the actual frontier explorer file
+docker exec -it simulator bash
+ -c "source install/setup.bash && source /opt/ros/jazzy/setup.bash && \
+python3 /root/ws/src/frontier_explorer_centroids.py --ros-args \
+  -p map_topic:=/projected_map \
+  -p robot_base_frame:=base_link \
+  -p global_frame:=map"
+```
+
+------------------------------------------------------------------------------------------------------------------------------------------
+
 ##### Note for forked version #####
 The world file used is go_sim/src/gazebo_sim/world/cafe.world
 In order to have this file use the correct file paths, run:
