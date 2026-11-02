@@ -239,6 +239,10 @@ class FrontierExplorer(Node):
         self.tree_sub = self.create_subscription(Float64MultiArray, '/trees/registry',
                                                  self.trees_cb, tree_qos)
         self.tree_rows = np.zeros((0, 7))
+        self.visited_gids = {}      # gid -> (x, y); only used for publishing
+        vis_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+                             reliability=QoSReliabilityPolicy.RELIABLE)
+        self.pub_visited = self.create_publisher(Float64MultiArray, '/trees/visited', vis_qos)
 
         # persistent tree records (see module docstring)
         self.trees = []
@@ -1207,6 +1211,8 @@ class FrontierExplorer(Node):
             for tree, slot in matches:
                 slot['state'] = 'visited'
                 tree['started'] = True
+                self.report_tree_visited(tree)      # <-- new, publish only
+
         else:
             c = self.goal_centroids.pop((round(gx, 2), round(gy, 2)), None)
             if c is not None:
@@ -1507,6 +1513,27 @@ class FrontierExplorer(Node):
             markers.markers.append(line)
 
         self.marker_pub.publish(markers)
+
+    def report_tree_visited(self, tree):
+        """Tell live_detection which registry entry this tree is. Changes nothing here."""
+        best, bd = None, TREE_MATCH_RADIUS_M
+        for r in self.tree_rows:
+            d = math.hypot(float(r[1]) - tree['x'], float(r[2]) - tree['y'])
+            if d < bd:
+                best, bd = r, d
+        if best is None:
+            return
+        g = int(best[0])
+        if g in self.visited_gids:
+            return                  # already reported
+        self.visited_gids[g] = (float(best[1]), float(best[2]))
+        self.publish_visited()
+
+    def publish_visited(self):
+        msg = Float64MultiArray()
+        msg.data = [v for g, (x, y) in self.visited_gids.items()
+                    for v in (float(g), x, y)]
+        self.pub_visited.publish(msg)
 
     # ------------------------------------------------------------------
     # stats / completion
