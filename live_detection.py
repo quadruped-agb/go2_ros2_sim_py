@@ -17,8 +17,7 @@ import time
 import json
 import os
 from std_msgs.msg import Float64MultiArray, MultiArrayDimension
-from rclpy.qos import QoSProfile, DurabilityPolicy, qos_profile_sensor_data
-
+from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy, qos_profile_sensor_data
 
 # Debug dumps are written next to this file, not into the current working
 # directory, so they land in the same place no matter where you launch from.
@@ -234,6 +233,10 @@ class SensorStreamReader(Node):
         #publisher for centroids
         tree_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.pub_trees = self.create_publisher(Float64MultiArray, '/trees/registry', tree_qos)
+        vis_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
+                             reliability=ReliabilityPolicy.RELIABLE)
+        self.sub_visited = self.create_subscription(
+            Float64MultiArray, '/trees/visited', self.visited_callback, vis_qos)
 
         # voxel map from octomap (replaces the occ map accumulation)
         self.latest_oct = None
@@ -354,6 +357,13 @@ class SensorStreamReader(Node):
 
     def octomap_callback(self, msg):
         self.latest_oct = msg      # just keep the newest; convert once per detection cycle
+
+    def visited_callback(self, msg):
+        d = np.asarray(msg.data, dtype=np.float64)
+        if d.size < 3:
+            return
+        n = self.registry.mark_visited(d[: d.size // 3 * 3].reshape(-1, 3))
+        self.get_logger().info(f"/trees/visited: {n} registry entr{'y' if n == 1 else 'ies'} frozen")
 
     def _process(self, stamp, pts, frame_idx, pose, arrival_time):
         R, t = pose
@@ -1111,11 +1121,14 @@ class TreeRegistry:
             taken_gid.add(gid)
             x, y, r = dets[i]
             t = self.trees[gid]
-            self._unindex(t)
-            t.x, t.y, t.r = float(x), float(y), float(r)   # line 6: replace
+
+            if t.status != VISITED:                        # visited entries keep their geometry
+                self._unindex(t)
+                t.x, t.y, t.r = float(x), float(y), float(r)   # line 6: replace
+                self._index(t)
+
             t.n_obs += 1
             t.last_frame = frame_idx
-            self._index(t)
             events.append(("match", gid, d))
 
         # ---- step 1b: unmatched components become new identities -------
@@ -1174,8 +1187,15 @@ class TreeRegistry:
                 tj = self.trees[gone]
                 self._unindex(ti)
                 self._unindex(tj)
-                ti.x, ti.y, ti.r = self._blend(ti.x, ti.y, ti.r,
-                                               tj.x, tj.y, tj.r)
+
+                
+                if ti.status == VISITED:
+                    pass                                    # keep the frozen geometry
+                elif tj.status == VISITED:
+                    ti.x, ti.y, ti.r = tj.x, tj.y, tj.r     # adopt the frozen geometry
+                else:
+                    ti.x, ti.y, ti.r = self._blend(ti.x, ti.y, ti.r,
+                                                   tj.x, tj.y, tj.r) 
                 ti.status = max(ti.status, tj.status)
                 ti.discovery_order = min(ti.discovery_order, tj.discovery_order)
                 ti.n_obs += tj.n_obs
@@ -1184,6 +1204,23 @@ class TreeRegistry:
                 self._index(ti)
                 events.append(("merge", gi, gone))
         return events
+
+    def mark_visited(self, items, fallback_radius=1.0):
+        """items: (N,3) rows [gid, x, y]. Returns how many entries were newly frozen."""
+        n = 0
+        for gid, x, y in items:
+            t = self.trees.get(int(gid))
+            if t is None:               # gid was merged away: use the nearest entry instead
+                best, bd = None, fallback_radius
+                for c in self.trees.values():
+                    d = math.hypot(c.x - x, c.y - y)
+                    if d < bd:
+                        best, bd = c, d
+                t = best
+            if t is not None and t.status != VISITED:
+                t.status = VISITED
+                n += 1
+        return n
 
     # ------------------------------------------------------------------ #
     def rows(self, min_obs=1):
