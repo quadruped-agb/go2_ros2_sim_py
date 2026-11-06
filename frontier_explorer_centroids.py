@@ -159,6 +159,9 @@ STALL_MOVE_M = 0.25                 # "moved" means further than this from where
 ESCAPE_SPEED_MPS = 0.12             # gentle back-off speed
 ESCAPE_TIME_S = 2.5                 # ~0.3 m
 ESCAPE_TRIGGER_DIST_M = 0.75        # only back off if a mapped obstacle is this close
+# ---------------- global planning: zones ----------------
+ZONE_NX, ZONE_NY = 2, 2             # the plot is split into ZONE_NX x ZONE_NY equal zones
+ZONE_WAIT_S = 15.0                  # stay in a zone this long for a tree that is only cooling down
 
 # (x, y, bonus, yaw)
 DUMMY_TARGETS = []
@@ -232,6 +235,18 @@ class FrontierExplorer(Node):
         self.merge_radius = float(self.get_parameter('merge_radius_m').value)
         self.face_tol = math.radians(
             0.5 * float(self.get_parameter('camera_hfov_deg').value) * CAMERA_FOV_USE)
+
+        # ---- global planning: zones ----
+        self.declare_parameter('zones_enabled', True)
+        self.declare_parameter('zone_nx', ZONE_NX)
+        self.declare_parameter('zone_ny', ZONE_NY)
+        self.declare_parameter('zone_wait_s', ZONE_WAIT_S)
+        self.zones_enabled = bool(self.get_parameter('zones_enabled').value)
+        self.zone_nx = max(1, int(self.get_parameter('zone_nx').value))
+        self.zone_ny = max(1, int(self.get_parameter('zone_ny').value))
+        self.zone_wait_s = float(self.get_parameter('zone_wait_s').value)
+        self.active_zone = None             # (i, j) of the zone being worked on
+        self.zone_pub = self.create_publisher(MarkerArray, 'frontier_explorer/zones', 10)
 
         # live tree registry: rows of [gid, x, y, r, status, disc, n_obs]
         tree_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
@@ -550,6 +565,11 @@ class FrontierExplorer(Node):
         # flight, so no queued goal can refer to a position that is about to change.
         if self.merge_enabled:
             self.merge_viewpoints(data, grid_msg)
+
+
+        # global layer: finish the current zone before moving on          # ADD
+        if self.zones_enabled and self.zoned_step(data, grid_msg, robot_xy):   # ADD
+            return                                                          # ADD
 
         n_pending = self.count_pending_trees()
         n_ready = self.count_ready_trees()
@@ -1166,7 +1186,7 @@ class FrontierExplorer(Node):
         self.maintain_tree_slots(data, grid_msg)
         return added
 
-    def plan_tree_tour(self, robot_xy):
+    def plan_tree_tour(self, robot_xy, zone=None):
         """Goals for all ready tree viewpoints, one whole tree at a time. A merged
         viewpoint is listed once, however many trees it serves."""
         now = time.monotonic()
@@ -1174,8 +1194,13 @@ class FrontierExplorer(Node):
         for t in self.trees:
             if t['done'] or now < t['cool']:
                 continue
+            # if zone is not None and self.zone_of(t['x'], t['y']) != zone:   # ADD
+            #     continue                                                     # ADD
+            # ready = [s for s in t['slots']
+            #          if s['state'] == 'pending' and s['cur'] is not None and now >= s['cool']]
             ready = [s for s in t['slots']
-                     if s['state'] == 'pending' and s['cur'] is not None and now >= s['cool']]
+                     if s['state'] == 'pending' and s['cur'] is not None and now >= s['cool']
+                     and (zone is None or self.zone_of(s['cur'][0], s['cur'][1]) == zone)]
             if ready:
                 trees.append((t, ready))
         if not trees:
@@ -1195,7 +1220,175 @@ class FrontierExplorer(Node):
                 goals.append(s['cur'])
                 cur_xy = (s['cur'][0], s['cur'][1])
         return goals
+    # ------------------------------------------------------------------
+    # global planning: zones
+    # ------------------------------------------------------------------
+    def zone_size(self):
+        return ((self.bounds_max_x - self.bounds_min_x) / self.zone_nx,
+                (self.bounds_max_y - self.bounds_min_y) / self.zone_ny)
 
+    def zone_of(self, x, y):
+        zw, zh = self.zone_size()
+        i = min(max(int((x - self.bounds_min_x) // zw), 0), self.zone_nx - 1)
+        j = min(max(int((y - self.bounds_min_y) // zh), 0), self.zone_ny - 1)
+        return (i, j)
+
+    def zone_centre(self, z):
+        zw, zh = self.zone_size()
+        return (self.bounds_min_x + (z[0] + 0.5) * zw, self.bounds_min_y + (z[1] + 0.5) * zh)
+
+    @staticmethod
+    def tree_ready(t, now):
+        if t['done'] or now < t['cool']:
+            return False
+        return any(s['state'] == 'pending' and s['cur'] is not None and now >= s['cool']
+                   for s in t['slots'])
+
+    def next_zone(self, cur, work, robot_xy):
+        """Side neighbour with work, else diagonal neighbour, else any zone with work;
+        nearest centre first within each group."""
+        side = [z for z in work if abs(z[0] - cur[0]) + abs(z[1] - cur[1]) == 1]
+        diag = [z for z in work if abs(z[0] - cur[0]) == 1 and abs(z[1] - cur[1]) == 1]
+        pool = side or diag or list(work)
+
+        def dist(z):
+            cx, cy = self.zone_centre(z)
+            return math.hypot(cx - robot_xy[0], cy - robot_xy[1])
+        return min(pool, key=dist)
+
+    def zoned_step(self, data, grid_msg, robot_xy):
+        """True if goals were queued (or the robot waits in the zone on purpose);
+        False if no zone has work, so the normal waiting / completion logic runs."""
+        now = time.monotonic()
+        if self.active_zone is None:
+            self.active_zone = self.zone_of(*robot_xy)
+
+        # work per zone: ready trees ...
+        tree_work = {}
+        for t in self.trees:
+            if t['done'] or now < t['cool']:
+                continue
+            for s in t['slots']:
+                if s['state'] == 'pending' and s['cur'] is not None and now >= s['cool']:
+                    z_vp = self.zone_of(s['cur'][0], s['cur'][1])
+                    lst = tree_work.setdefault(z_vp, [])
+                    if not lst or lst[-1] is not t:       # list each tree once per zone
+                        lst.append(t)
+
+        # ... and selectable frontiers anywhere in the plot
+        front_work = {}
+        cov = self.coverage_in_plot()
+        if self.frontier_phase_enabled(cov is not None and cov >= self.coverage_done_pct):
+            clusters = self.detect_frontier_clusters(grid_msg, data)
+            self.last_cluster_count = len(clusters)
+            if clusters:
+                self.candidate_radius = MAX_CANDIDATE_RADIUS_LIMIT_M   # zones need the whole plot
+                cands = self.score_candidates(clusters, data, grid_msg, robot_xy)
+                self.candidate_radius = MAX_CANDIDATE_RADIUS_M
+                for c in cands:
+                    front_work.setdefault(self.zone_of(c['x'], c['y']), []).append(c)
+
+        z = self.active_zone
+        if z not in tree_work and z not in front_work:
+            # a tree here that is only cooling down after a failed goal: wait for it
+            for t in self.trees:
+                if t['done'] or self.zone_of(t['x'], t['y']) != z:
+                    continue
+                pend = [s['cool'] for s in t['slots'] if s['state'] == 'pending']
+                if not pend:
+                    continue
+                wait = max(t['cool'], min(pend)) - now
+                if 0.0 < wait <= self.zone_wait_s:
+                    self.get_logger().info(
+                        f"Zone {z}: waiting {wait:.0f} s for tree #{t['id']} (cooling down) "
+                        f"before leaving the zone", throttle_duration_sec=10.0)
+                    self.publish_zone_markers(tree_work, front_work)
+                    return True
+            work = set(tree_work) | set(front_work)
+            if not work:
+                self.publish_zone_markers(tree_work, front_work)
+                return False
+            self.active_zone = self.next_zone(z, work, robot_xy)
+            self.get_logger().info(
+                f'Zone {z} finished -- moving to zone {self.active_zone} '
+                f'({len(tree_work.get(self.active_zone, []))} ready tree(s), '
+                f'{len(front_work.get(self.active_zone, []))} frontier(s) there; '
+                f'{len(work)} zone(s) with work left)')
+            z = self.active_zone
+
+        if z in tree_work:
+            tour = self.plan_tree_tour(robot_xy, zone=z)
+            if tour:
+                self.goal_queue = tour
+                self.declared_complete = False
+                self.complete_since = None
+                self.get_logger().info(
+                    f'Zone {z}: tree tour of {len(tour)} viewpoint(s) over '
+                    f'{len(tree_work[z])} tree(s).')
+                self.publish_zone_markers(tree_work, front_work)
+                self.publish_planning_markers(robot_xy)
+                return True
+
+        if z in front_work:
+            cands = front_work[z]
+            top = sorted(cands, key=lambda c: c['utility'], reverse=True)[:self.top_k_candidates]
+            max_gain = max(c['gain'] for c in top) or 1
+            for c in top:
+                c['tsp_bonus'] = (c['gain'] / max_gain) * MAX_FRONTIER_BONUS_M
+            ordered = self.solve_viewpoint_order(top, robot_xy)
+            self.goal_queue = [(x, y, yaw) for (x, y, _b, yaw) in ordered]
+            self.last_candidates = cands
+            self.stall_count = 0
+            self.declared_complete = False
+            self.complete_since = None
+            self.get_logger().info(
+                f'Zone {z}: frontier sweep of {len(self.goal_queue)} viewpoint(s) '
+                f'({len(cands)} frontier(s) in this zone).')
+            self.publish_zone_markers(tree_work, front_work)
+            self.publish_planning_markers(robot_xy)
+            return bool(self.goal_queue)
+        return False
+
+    def publish_zone_markers(self, tree_work, front_work):
+        """Zone grid (white), active zone (green), zones with work left (orange)."""
+        ma = MarkerArray()
+        stamp = self.get_clock().now().to_msg()
+        zw, zh = self.zone_size()
+
+        grid = Marker()
+        grid.header.frame_id = self.global_frame
+        grid.header.stamp = stamp
+        grid.ns, grid.id, grid.type, grid.action = 'zone_grid', 0, Marker.LINE_LIST, Marker.ADD
+        grid.pose.orientation.w = 1.0
+        grid.scale.x = 0.04
+        grid.color.r = grid.color.g = grid.color.b = grid.color.a = 1.0
+        for i in range(self.zone_nx + 1):
+            x = self.bounds_min_x + i * zw
+            grid.points += [Point(x=x, y=self.bounds_min_y, z=0.05),
+                            Point(x=x, y=self.bounds_max_y, z=0.05)]
+        for j in range(self.zone_ny + 1):
+            y = self.bounds_min_y + j * zh
+            grid.points += [Point(x=self.bounds_min_x, y=y, z=0.05),
+                            Point(x=self.bounds_max_x, y=y, z=0.05)]
+        ma.markers.append(grid)
+
+        work = set(tree_work) | set(front_work)
+        for k, z in enumerate(sorted(work | ({self.active_zone} if self.active_zone else set()))):
+            cx, cy = self.zone_centre(z)
+            m = Marker()
+            m.header.frame_id = self.global_frame
+            m.header.stamp = stamp
+            m.ns, m.id, m.type, m.action = 'zone_fill', k, Marker.CUBE, Marker.ADD
+            m.pose.position.x, m.pose.position.y, m.pose.position.z = cx, cy, 0.01
+            m.pose.orientation.w = 1.0
+            m.scale.x, m.scale.y, m.scale.z = zw * 0.98, zh * 0.98, 0.01
+            if z == self.active_zone:
+                m.color.g, m.color.a = 1.0, 0.25
+            else:
+                m.color.r, m.color.g, m.color.a = 1.0, 0.5, 0.15
+            m.lifetime = Duration(sec=3)
+            ma.markers.append(m)
+        self.zone_pub.publish(ma)
     # ------------------------------------------------------------------
     # goal bookkeeping
     # ------------------------------------------------------------------
