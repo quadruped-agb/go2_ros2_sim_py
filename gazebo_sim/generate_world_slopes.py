@@ -16,7 +16,7 @@ import os
 import random
 import subprocess
 
-USE_MESH_VISUAL = True      # False = flat plane visual (like the original)
+USE_MESH_VISUAL = False      # False = flat plane visual (like the original)
 USE_BOX_COLLISION = True    # False = single plane collision (like the original)
 
 
@@ -223,7 +223,28 @@ apriltag_xml = "".join(apriltag_sdf(*t) for t in APRILTAGS)
 
 # addeddd
 tree_collisions_xml = all_tree_collisions_sdf(TREES_SPRUCE, TREES_FIR)
-terrain_collision_xml = terrain_collision_grid_sdf()
+
+terrain_model = f"""
+    <model name="terrain">
+      <static>true</static>
+      <link name="link">
+        {"" if USE_BOX_COLLISION else f'''<collision name="collision">
+          <geometry><plane><normal>0 0 1</normal><size>{TERRAIN_W} {TERRAIN_H}</size></plane></geometry>
+          <surface><friction><ode><mu>0.9</mu><mu2>0.9</mu2></ode></friction></surface>
+        </collision>'''}
+        <visual name="visual">
+          <geometry>
+            {f"<mesh><uri>file://{OBJ_PATH}</uri></mesh>" if USE_MESH_VISUAL else
+             f"<plane><normal>0 0 1</normal><size>{TERRAIN_W} {TERRAIN_H}</size></plane>"}
+          </geometry>
+          <material>
+            <ambient>1 1 1 1</ambient><diffuse>1 1 1 1</diffuse><specular>0.2 0.2 0.2 1</specular>
+            <pbr><metal><albedo_map>{GZ_DIFFUSE}</albedo_map><normal_map>{GZ_NORMAL}</normal_map></metal></pbr>
+          </material>
+        </visual>
+      </link>
+    </model>"""
+box_xml = terrain_collision_grid_sdf() if USE_BOX_COLLISION else ""
 
 world = f"""<?xml version="1.0" ?>
 <sdf version="1.6">
@@ -252,35 +273,14 @@ world = f"""<?xml version="1.0" ?>
       </attenuation>
       <direction>-0.5 0.1 -0.9</direction>
     </light>
+{terrain_model}
 
-    <model name="terrain">
-      <static>true</static>
-      <link name="link">
-        <visual name="visual">
-          <geometry>
-            <mesh><uri>file://{OBJ_PATH}</uri></mesh>
-          </geometry>
-          <material>
-            <ambient>1 1 1 1</ambient>
-            <diffuse>1 1 1 1</diffuse>
-            <specular>0.2 0.2 0.2 1</specular>
-            <pbr><metal>
-              <albedo_map>{GZ_DIFFUSE}</albedo_map>
-              <normal_map>{GZ_NORMAL}</normal_map>
-            </metal></pbr>
-          </material>
-        </visual>
-      </link>
-    </model>
-
-
-  
 {tree_xml_spruce}
 {tree_xml_fir}
 
 
 {tree_collisions_xml}
-{terrain_collision_xml}
+{box_xml}
 
     <!-- ── AprilTags ─────────────────────────── -->
 {apriltag_xml}
